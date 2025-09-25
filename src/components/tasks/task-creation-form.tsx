@@ -18,6 +18,7 @@ interface TaskCreationFormProps {
 export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Task", icon = "📋" }: TaskCreationFormProps) {
   const [taskTitle, setTaskTitle] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedTime, setSelectedTime] = useState('09:00');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
   const [priority, setPriority] = useState('3');
@@ -29,6 +30,7 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
       const taskData = {
         title: taskTitle,
         date: selectedDate.toISOString().split('T')[0],
+        dueTime: selectedTime,
         startTime,
         endTime,
         priority,
@@ -42,6 +44,7 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
   const handleReset = () => {
     setTaskTitle('');
     setSelectedDate(new Date());
+    setSelectedTime('09:00');
     setStartTime('09:00');
     setEndTime('10:00');
     setPriority('3');
@@ -73,7 +76,7 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md w-full">
+      <DialogContent className="max-w-2xl w-full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span>{icon}</span>
@@ -92,10 +95,10 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
             />
           </div>
 
-          {/* Date Selection */}
+          {/* Date & Time Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date
+              Due Date & Time
             </label>
             <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
@@ -104,19 +107,40 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
                   className="w-full justify-start"
                 >
                   <CalendarDays className="h-4 w-4 mr-2" />
-                  {selectedDate ? formatDate(selectedDate) : 'Select date'}
+                  {selectedDate ? `${formatDate(selectedDate)} ${selectedTime}` : 'Select date & time'}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => {
-                    setSelectedDate(date);
-                    setIsCalendarOpen(false);
-                  }}
-                  initialFocus
-                />
+                <div className="p-3">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    initialFocus
+                  />
+                  <div className="mt-3 pt-3 border-t">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Time
+                    </label>
+                    <div className="relative">
+                      <Clock className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
+                      <Input
+                        type="time"
+                        value={selectedTime}
+                        onChange={(e) => setSelectedTime(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      onClick={() => setIsCalendarOpen(false)}
+                      size="sm"
+                    >
+                      Done
+                    </Button>
+                  </div>
+                </div>
               </PopoverContent>
             </Popover>
           </div>

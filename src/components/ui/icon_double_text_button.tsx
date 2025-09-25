@@ -22,7 +22,7 @@ const iconDoubleTextButtonVariants = cva(
 )
 
 interface IconDoubleTextButtonProps
-  extends Omit<React.ComponentProps<typeof Button>, "children">,
+  extends Omit<React.ComponentProps<typeof Button>, "children" | "size">,
     VariantProps<typeof iconDoubleTextButtonVariants> {
   icon?: React.ReactNode
   primaryText: string

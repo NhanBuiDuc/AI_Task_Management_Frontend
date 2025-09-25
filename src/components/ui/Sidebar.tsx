@@ -3,80 +3,61 @@
 import React, { useState } from "react";
 import { AvatarDropdown } from "@/components/ui/avartar_dropdown";
 import { IconTextButton } from "./icon_text_button";
-import { SidebarItem } from "@/types";
+import { SidebarItem, ProjectItem } from "@/types";
 import { ChevronDown, ChevronRight, Hash, Plus, Bell, PanelLeftClose, PanelLeftOpen, Calendar } from "lucide-react";
+import { getProjectIcon } from '@/lib/iconMapping';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import TaskForm from "@/components/ui/task_form";
 import ProjectForm from "@/components/ui/project_form";
 import { Button } from "@/components/ui/button";
-
+import { ComprehensiveCalendar } from "@/pages/ComprehensiveCalendar";
+import { enhancedTaskApi } from '@/lib/api/enhancedTaskApi';
 interface SidebarProps {
-  items: SidebarItem[];
+  navigationItems: SidebarItem[];
+  projectItems: ProjectItem[];
   onChange: (id: string) => void;
+  onProjectsChange: (projects: ProjectItem[]) => void;
 }
 
-export function Sidebar({items, onChange}: SidebarProps){
+export function Sidebar({navigationItems: items, projectItems: projects, onChange, onProjectsChange}: SidebarProps){
   const [showProjects, setShowProjects] = useState(true);
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showGettingStarted, setShowGettingStarted] = useState(true);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Project data structure that matches ProjectTasks numeric IDs
-  const projects = [
-    { 
-      id: 4, 
-      name: "Getting Started", 
-      label: "Getting Started 💡", 
-      parent_id: null, 
-      taskCount: 8,
-      hasChildren: true 
-    },
-    { 
-      id: 8, 
-      name: "Frontend Basics", 
-      label: "sub", 
-      parent_id: 4, 
-      taskCount: 1,
-      hasChildren: false 
-    },
-    { 
-      id: 5, 
-      name: "Mobile Development", 
-      label: "Notes and Reference Materials", 
-      parent_id: null, 
-      taskCount: 2,
-      hasChildren: false 
-    },
-    { 
-      id: 11, 
-      name: "Task Manager App", 
-      label: "board", 
-      parent_id: null, 
-      taskCount: 1,
-      hasChildren: false 
-    }
-  ];
-
   // Get parent projects
   const parentProjects = projects.filter(project => project.parent_id === null);
   
   // Get sub projects for a parent
-  const getSubProjects = (parentId: number) => {
+  const getSubProjects = (parentId: string) => {
     return projects.filter(project => project.parent_id === parentId);
   };
 
-  const handleAddTask = (newTask: any) => {
-    console.log("New task created:", newTask);
-    setShowTaskForm(false);
+  const handleAddTask = async (newTask: any) => {
+    try {
+      console.log("Creating new task:", newTask);
+
+      // Use enhanced API that will emit events and trigger real-time updates
+      const createdTask = await enhancedTaskApi.createTask(newTask);
+
+      console.log("Task created successfully:", createdTask);
+      setShowTaskForm(false);
+    } catch (error) {
+      console.error("Failed to create task:", error);
+      // You might want to show an error message to the user here
+    }
   };
 
   const handleCancelForm = () => {
     setShowTaskForm(false);
   };
 
-  const handleAddProject = (newProject: any) => {
+  const handleAddProject = (newProject: ProjectItem) => {
     console.log("New project created:", newProject);
+    // Add the new project to the existing projects list
+    const updatedProjects = [...projects, newProject];
+    onProjectsChange(updatedProjects);
     setShowProjectForm(false);
   };
 
@@ -126,24 +107,29 @@ export function Sidebar({items, onChange}: SidebarProps){
           label={isExpanded ? "Add task" : ""}
         />
 
-        {/* Calendar Button */}
-        <IconTextButton
-          onClick={() => onChange("calendar")}
-          className="w-full justify-start text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-          variant="ghost"
-          size="default"
-          icon={<Calendar size={18} />}
-          label={isExpanded ? "Calendar" : ""}
-        />
-
         {/* Main Navigation Items */}
         <div className="space-y-1 mt-4">
           {items.map((item: SidebarItem) => {
             const Icon = item.icon;
 
-            // Skip the projects and add-task items from main features
-            if (item.id === "projects" || item.id === "add-task") return null;
-
+            // // Skip the projects and add-task items from main features
+            // if (item.id === "projects" || item.id === "add-task") return null;
+            if (item.id === "calendar"){
+              return (
+              <IconTextButton
+                key={item.id}
+                onClick={() => onChange(item.id)}
+                className="w-full justify-start text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                variant="ghost"
+                size="default"
+                icon={<Calendar size={18} />}
+                label={isExpanded ? "Calendar" : ""}
+                endTextLabel={isExpanded && item.count !== undefined ? item.count.toString() : ""}
+                labelClassName=""
+                endTextLabelClassName="text-xs text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded"
+              />
+            );
+            }
             return (
               <IconTextButton
                 key={item.id}
@@ -153,7 +139,7 @@ export function Sidebar({items, onChange}: SidebarProps){
                 size="default"
                 icon={Icon ? <Icon size={18} /> : undefined }
                 label={isExpanded ? item.label : ""}
-                endTextLabel={isExpanded ? (item.id === "inbox" ? "3" : item.id === "today" ? "1" : "") : ""}
+                endTextLabel={isExpanded && item.count !== undefined ? item.count.toString() : ""}
                 labelClassName=""
                 endTextLabelClassName="text-xs text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded"
               />
@@ -172,7 +158,7 @@ export function Sidebar({items, onChange}: SidebarProps){
                 size="default"
                 icon={showProjects ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                 label="My Projects"
-                endTextLabel="USED: 4/5"
+                endTextLabel={projects.length > 0 ? projects.length.toString() + " projects" : ""}
                 endTextLabelClassName="text-xs text-gray-500"
               />
               <Button
@@ -190,7 +176,7 @@ export function Sidebar({items, onChange}: SidebarProps){
                 {parentProjects.map((project) => {
                   const subProjects = getSubProjects(project.id);
                   
-                  if (project.id === 4) { // Getting Started project
+                  if (project.hasChildren) { // Getting Started project
                     return (
                       <div key={project.id}>
                         {/* Getting Started with separate click areas */}
@@ -198,10 +184,19 @@ export function Sidebar({items, onChange}: SidebarProps){
                           {/* Main project button - clickable for navigation */}
                           <button
                             onClick={() => onChange(project.id.toString())} // Navigate to ProjectTasks
-                            className="flex items-center gap-2 px-2 py-1.5 flex-1 text-left rounded-l text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            className="flex items-center gap-2 px-2 py-1.5 flex-1 text-left rounded-l hover:bg-opacity-20"
+                            style={{
+                              color: project.color || '#EA580C'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = `${project.color || '#EA580C'}20`;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
                           >
-                            <Hash size={16} />
-                            <span>{project.label}</span>
+                            {getProjectIcon(project.icon, 16, '', { color: project.color || '#EA580C' })}
+                            <span>{project.name}</span>
                           </button>
 
                           {/* Dropdown toggle button - separate click area */}
@@ -217,7 +212,7 @@ export function Sidebar({items, onChange}: SidebarProps){
                           </button>
 
                           {/* Task count */}
-                          <div className="px-2 text-xs text-orange-500 font-medium">
+                          <div className="px-2 text-xs font-medium" style={{ color: project.color || '#EA580C' }}>
                             {project.taskCount}
                           </div>
                         </div>
@@ -229,13 +224,15 @@ export function Sidebar({items, onChange}: SidebarProps){
                               <IconTextButton
                                 key={subProject.id}
                                 onClick={() => onChange(subProject.id.toString())}
-                                className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                                className="w-full justify-start hover:bg-gray-100"
                                 variant="ghost"
                                 size="sm"
-                                icon={<Hash size={16} />}
-                                label={subProject.label}
+                                icon={getProjectIcon(subProject.icon, 16, '', { color: subProject.color || '#6B7280' })}
+                                label={subProject.name}
+                                labelStyle={{ color: subProject.color || '#6B7280' }}
                                 endTextLabel={subProject.taskCount > 0 ? subProject.taskCount.toString() : undefined}
-                                endTextLabelClassName="text-xs text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded"
+                                endTextLabelClassName="text-xs bg-gray-200 px-1.5 py-0.5 rounded"
+                                endTextLabelStyle={{ color: subProject.color || '#6B7280' }}
                               />
                             ))}
                           </div>
@@ -249,13 +246,16 @@ export function Sidebar({items, onChange}: SidebarProps){
                     <IconTextButton
                       key={project.id}
                       onClick={() => onChange(project.id.toString())}
-                      className="w-full justify-start text-gray-600 hover:text-gray-800 hover:bg-gray-100"
+                      className="w-full justify-start hover:bg-gray-100"
                       variant="ghost"
                       size="default"
-                      icon={<Hash size={16} />}
-                      label={project.label}
+                      icon={getProjectIcon(project.icon, 16, '', { color: project.color || '#6B7280' })}
+                      label={project.name}
+                      labelClassName=""
+                      labelStyle={{ color: project.color || '#6B7280' }}
                       endTextLabel={project.taskCount > 0 ? project.taskCount.toString() : undefined}
-                      endTextLabelClassName="text-xs text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded"
+                      endTextLabelClassName="text-xs bg-gray-200 px-1.5 py-0.5 rounded"
+                      endTextLabelStyle={{ color: project.color || '#6B7280' }}
                     />
                   );
                 })}
@@ -281,7 +281,7 @@ export function Sidebar({items, onChange}: SidebarProps){
 
       {/* Task Form Modal */}
       <Dialog open={showTaskForm} onOpenChange={setShowTaskForm}>
-        <DialogContent className="max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[900px] max-w-[90vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
           </DialogHeader>

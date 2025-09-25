@@ -3,7 +3,7 @@ import { TaskCreationForm as TaskCreationPanel } from "../tasks/task-creation-fo
 import { TaskDetailModal } from "../tasks/task-detail-modal"
 import { Button } from "@/components/ui/button"
 import { Plus, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
-import type { CalendarEvent, CalendarViewType } from "@/app/page"
+import type { CalendarEvent, CalendarViewType } from "@/pages/ComprehensiveCalendar"
 import { useState } from "react"
 
 interface CalendarViewProps {

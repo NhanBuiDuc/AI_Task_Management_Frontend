@@ -3,6 +3,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { projectApi } from '@/lib/api';
+import { ProjectItem } from '@/types';
 import {
   FolderIcon,
   Hash,
@@ -23,7 +25,7 @@ import {
 } from 'lucide-react';
 
 interface ProjectFormProps {
-  onSubmit?: (project: any) => void;
+  onSubmit?: (project: ProjectItem) => void;
   onCancel?: () => void;
 }
 
@@ -33,6 +35,8 @@ export default function ProjectForm({ onSubmit, onCancel }: ProjectFormProps) {
   const [selectedIcon, setSelectedIcon] = useState('folder');
   const [isColorOpen, setIsColorOpen] = useState(false);
   const [isIconOpen, setIsIconOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const colorOptions = [
     { value: 'blue', label: 'Blue', color: 'bg-blue-500', textColor: 'text-blue-500' },
@@ -68,17 +72,53 @@ export default function ProjectForm({ onSubmit, onCancel }: ProjectFormProps) {
   const selectedIconOption = iconOptions.find(i => i.value === selectedIcon);
   const IconComponent = selectedIconOption?.icon || FolderIcon;
 
-  const handleSubmit = () => {
-    const project = {
-      name: projectName,
-      color: selectedColor,
-      icon: selectedIcon
-    };
-    onSubmit?.(project);
+  const handleSubmit = async () => {
+    if (!projectName.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Check if project name already exists
+      const nameExists = await projectApi.checkProjectNameExists(projectName.trim());
+      if (nameExists) {
+        setError('A project with this name already exists');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create the project
+      const projectData = {
+        name: projectName.trim(),
+        color: selectedColor,
+        icon: selectedIcon,
+        parent_id: null, // Top-level project for now
+      };
+
+      const newProject = await projectApi.createProject(projectData);
+      onSubmit?.(newProject);
+
+      // Reset form
+      setProjectName('');
+      setSelectedColor('blue');
+      setSelectedIcon('folder');
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create project');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="w-full max-w-md mx-auto bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+      {/* Error Message */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* Project Name Input */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -183,10 +223,10 @@ export default function ProjectForm({ onSubmit, onCancel }: ProjectFormProps) {
         <Button
           size="sm"
           onClick={handleSubmit}
-          disabled={!projectName.trim()}
+          disabled={!projectName.trim() || isLoading}
           className="bg-blue-500 hover:bg-blue-600 text-white"
         >
-          Create Project
+          {isLoading ? 'Creating...' : 'Create Project'}
         </Button>
       </div>
     </div>

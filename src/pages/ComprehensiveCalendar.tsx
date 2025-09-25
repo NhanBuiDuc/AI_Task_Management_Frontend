@@ -117,3 +117,5 @@ export function ComprehensiveCalendar() {
     </div>
   );
 }
+
+export default ComprehensiveCalendar;

@@ -14,7 +14,6 @@ const iconTextButtonVariants = cva(
         default: "h-10 px-3 py-2 text-sm",
         sm: "h-8 px-2 py-1.5 gap-2 text-xs",
         lg: "h-12 px-4 py-3 gap-4 text-base",
-        xl: "h-16 px-6 py-4 gap-6 text-lg",
       },
     },
     defaultVariants: {
@@ -24,7 +23,7 @@ const iconTextButtonVariants = cva(
 )
 
 interface IconTextButtonProps
-  extends Omit<React.ComponentProps<typeof Button>, "children">,
+  extends Omit<React.ComponentProps<typeof Button>, "children" | "size">,
     VariantProps<typeof iconTextButtonVariants> {
   icon?: React.ReactNode
   label: string
@@ -32,6 +31,8 @@ interface IconTextButtonProps
   iconClassName?: string
   labelClassName?: string
   endTextLabelClassName?: string
+  labelStyle?: React.CSSProperties
+  endTextLabelStyle?: React.CSSProperties
 }
 
 function IconTextButton({
@@ -44,6 +45,8 @@ function IconTextButton({
   iconClassName,
   labelClassName,
   endTextLabelClassName,
+  labelStyle,
+  endTextLabelStyle,
   ...props
 }: IconTextButtonProps) {
   return (
@@ -54,7 +57,6 @@ function IconTextButton({
         className
       )}
       variant={variant}
-      size={size}
       {...props}
     >
       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -63,7 +65,7 @@ function IconTextButton({
             {icon}
           </div>
         )}
-        <span className={cn("font-medium truncate text-left", labelClassName)}>
+        <span className={cn("font-medium truncate text-left", labelClassName)} style={labelStyle}>
           {label}
         </span>
       </div>
@@ -73,6 +75,7 @@ function IconTextButton({
             "text-xs font-medium shrink-0 ml-auto opacity-70",
             endTextLabelClassName
           )}
+          style={endTextLabelStyle}
         >
           {endTextLabel}
         </span>

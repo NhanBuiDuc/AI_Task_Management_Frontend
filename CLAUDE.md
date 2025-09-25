@@ -385,3 +385,138 @@ const activeItem = navItems.find((item) => item.id === activeId)!;
 6. **Developer Experience**: MCP integration for component management
 
 The current architecture provides an excellent foundation for scaling while maintaining clean code principles and modern React best practices.
+
+Project → Sections → Tasks: Full Behavior Spec
+1. Inbox View
+
+Sections
+
+Only sections with current_view = "inbox".
+
+Can add new sections:
+
+project_id = null
+
+current_view = "inbox"
+
+Can have or not have a parent section.
+
+Tasks
+
+Load all tasks where current_view includes "inbox".
+
+When inserting into Inbox:
+
+project_id = null
+
+current_view = ["inbox"]
+
+If due date = today, current_view = ["inbox", "today"].
+
+2. Today View
+
+Sections
+
+One section per day, e.g., "21 September 2025".
+
+Backend behavior:
+
+Automatically create today’s section if not existing:
+
+current_view = "today"
+
+project_id = null
+
+Tasks
+
+Load all tasks with due_date = today (00:00–23:59).
+
+Assign tasks to today’s section:
+
+If task is Inbox: current_view = ["inbox", "today"]
+
+If task belongs to a Project:
+
+current_view = ["project", "today"]
+
+project_id = <project_id>
+
+3. Upcoming View
+
+Sections
+
+Always exactly two sections:
+
+This Week
+
+Name: "This Week ( <today> – <end of week> )"
+
+current_view = "upcoming"
+
+project_id = null
+
+Next Week
+
+Name: "Next Week ( <next Monday> – <next Sunday> )"
+
+current_view = "upcoming"
+
+project_id = null
+
+System ensures these sections exist daily.
+
+Tasks
+
+Assign tasks by due date:
+
+This Week Section → tasks with due_date between today and end of this week.
+
+Next Week Section → tasks with due_date in the next week (following Monday → Sunday).
+
+Tasks belonging to projects are included if their due dates fall in these ranges:
+
+current_view = ["project", "upcoming"]
+
+project_id = <project_id>
+
+4. Task project_id and current_view Rules
+
+Inbox Tasks
+
+Inserted into Inbox → project_id = null, current_view = ["inbox"]
+
+Due today → current_view = ["inbox", "today"]
+
+Project Tasks
+
+Inserted into Project → project_id = <project_id>
+
+Due today → current_view = ["project", "today"]
+
+Due this week/next week → current_view = ["project", "upcoming"]
+
+No due date / outside today/upcoming → current_view = ["project"]
+
+Automatic Daily Update
+
+Every day, the system checks all tasks and updates current_view automatically according to their due date.
+
+Ensures tasks always appear in the correct dynamic views (Inbox, Today, Upcoming, Project).
+
+5. Key Summary
+Target	Due Date	Project ID	current_view
+Inbox	Any	null	["inbox"]
+Inbox	Today	null	["inbox", "today"]
+Project	Today	<project_id>	["project", "today"]
+Project	This Week / Next Week	<project_id>	["project", "upcoming"]
+Project	Other / None	<project_id>	["project"]
+
+Views Overview
+
+Inbox → free bucket for tasks without projects.
+
+Today → daily section for tasks due today.
+
+Upcoming → weekly sections for tasks due this week/next week.
+
+Project → static section for tasks assigned to a project.

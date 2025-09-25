@@ -7,28 +7,19 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CalendarDays, Clock, Flag, Trash2, Edit, Check, X } from 'lucide-react';
-
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  dueDate: Date;
-  priority: string;
-  startTime?: string;
-  endTime?: string;
-}
+import { TaskItem, Piority } from '@/types';
 
 interface TaskDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  task: Task | null;
-  onUpdateTask: (taskId: string, updates: any) => void;
+  task: TaskItem | null;
+  onUpdateTask: (taskId: string, updates: Partial<TaskItem>) => void;
+  onDeleteTask?: (taskId: string) => void;
 }
 
-export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDetailModalProps) {
+export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask, onDeleteTask }: TaskDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedTask, setEditedTask] = useState<Task | null>(null);
+  const [editedTask, setEditedTask] = useState<TaskItem | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   useEffect(() => {
@@ -42,12 +33,12 @@ export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDet
   const handleSave = () => {
     if (editedTask) {
       onUpdateTask(task.id, {
-        title: editedTask.title,
+        name: editedTask.name,
         description: editedTask.description,
-        dueDate: editedTask.dueDate,
-        priority: editedTask.priority,
-        startTime: editedTask.startTime,
-        endTime: editedTask.endTime,
+        due_date: editedTask.due_date,
+        piority: editedTask.piority,
+        // startTime: editedTask.startTime, // Not available in TaskItem
+        // endTime: editedTask.endTime, // Not available in TaskItem
       });
       setIsEditing(false);
     }
@@ -71,14 +62,15 @@ export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDet
     });
   };
 
-  const priorityOptions = [
-    { value: '1', label: 'Priority 1', color: 'text-red-500', bgColor: 'bg-red-100' },
-    { value: '2', label: 'Priority 2', color: 'text-orange-500', bgColor: 'bg-orange-100' },
-    { value: '3', label: 'Priority 3', color: 'text-blue-500', bgColor: 'bg-blue-100' },
-    { value: '4', label: 'Priority 4', color: 'text-gray-500', bgColor: 'bg-gray-100' },
+  const priorityOptions: { value: Piority; label: string; color: string; bgColor: string }[] = [
+    { value: 'emergency', label: 'Emergency', color: 'text-red-600', bgColor: 'bg-red-100' },
+    { value: 'urgent', label: 'Urgent', color: 'text-red-500', bgColor: 'bg-red-100' },
+    { value: 'high', label: 'High', color: 'text-orange-500', bgColor: 'bg-orange-100' },
+    { value: 'medium', label: 'Medium', color: 'text-blue-500', bgColor: 'bg-blue-100' },
+    { value: 'low', label: 'Low', color: 'text-gray-500', bgColor: 'bg-gray-100' },
   ];
 
-  const currentPriority = priorityOptions.find(p => p.value === editedTask.priority);
+  const currentPriority = priorityOptions.find(p => p.value === editedTask.piority);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -128,13 +120,13 @@ export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDet
             </label>
             {isEditing ? (
               <Input
-                value={editedTask.title}
-                onChange={(e) => setEditedTask({ ...editedTask, title: e.target.value })}
+                value={editedTask.name}
+                onChange={(e) => setEditedTask({ ...editedTask, name: e.target.value })}
                 className="w-full"
               />
             ) : (
               <div className="p-3 bg-gray-50 rounded-md">
-                <h3 className="font-medium text-gray-900">{task.title}</h3>
+                <h3 className="font-medium text-gray-900">{task.name}</h3>
               </div>
             )}
           </div>
@@ -173,16 +165,16 @@ export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDet
                     className="w-full justify-start"
                   >
                     <CalendarDays className="h-4 w-4 mr-2" />
-                    {formatDate(editedTask.dueDate)}
+                    {formatDate(new Date(editedTask.due_date))}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={editedTask.dueDate}
+                    selected={new Date(editedTask.due_date)}
                     onSelect={(date) => {
                       if (date) {
-                        setEditedTask({ ...editedTask, dueDate: date });
+                        setEditedTask({ ...editedTask, due_date: date.toISOString().split('T')[0] });
                         setIsCalendarOpen(false);
                       }
                     }}
@@ -193,48 +185,12 @@ export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDet
             ) : (
               <div className="p-3 bg-gray-50 rounded-md flex items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-gray-500" />
-                <span>{formatDate(task.dueDate)}</span>
+                <span>{formatDate(new Date(task.due_date))}</span>
               </div>
             )}
           </div>
 
-          {/* Time Range (if available) */}
-          {(task.startTime || task.endTime) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Time
-              </label>
-              {isEditing ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="relative">
-                    <Clock className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-                    <Input
-                      type="time"
-                      value={editedTask.startTime || ''}
-                      onChange={(e) => setEditedTask({ ...editedTask, startTime: e.target.value })}
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Clock className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-                    <Input
-                      type="time"
-                      value={editedTask.endTime || ''}
-                      onChange={(e) => setEditedTask({ ...editedTask, endTime: e.target.value })}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-gray-50 rounded-md flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-gray-500" />
-                  <span>
-                    {task.startTime} - {task.endTime}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Time Range - Not available in TaskItem */}
 
           {/* Priority */}
           <div>
@@ -243,8 +199,8 @@ export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDet
             </label>
             {isEditing ? (
               <Select
-                value={editedTask.priority}
-                onValueChange={(value) => setEditedTask({ ...editedTask, priority: value })}
+                value={editedTask.piority}
+                onValueChange={(value) => setEditedTask({ ...editedTask, piority: value as Piority })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -276,8 +232,9 @@ export function TaskDetailModal({ isOpen, onClose, task, onUpdateTask }: TaskDet
               variant="outline"
               className="text-red-600 hover:bg-red-50"
               onClick={() => {
-                // Handle delete task
-                onUpdateTask(task.id, { deleted: true });
+                if (onDeleteTask) {
+                  onDeleteTask(task.id);
+                }
                 onClose();
               }}
             >
