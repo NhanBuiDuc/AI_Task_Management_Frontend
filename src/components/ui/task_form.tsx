@@ -16,13 +16,20 @@ import {
   MoreHorizontal,
   Inbox,
   X,
-  Clock
+  Clock,
+  Repeat,
+  Check,
+  RotateCcw,
+  Archive
 } from 'lucide-react';
 
 
 interface TaskFormProps {
+  task?: TaskItem; // If provided, the form is in edit mode
   onSubmit?: (task: Partial<TaskItem>) => void;
   onCancel?: () => void;
+  onToggleCompletion?: (taskId: string, completed: boolean) => void;
+  onSendToCompleted?: (taskId: string) => void;
   currentContext?: {
     view: 'inbox' | 'project' | 'today' | 'upcoming' | 'completed';
     projectId?: string;
@@ -32,16 +39,27 @@ interface TaskFormProps {
   };
 }
 
-export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFormProps) {
-  const [taskName, setTaskName] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [selectedTime, setSelectedTime] = useState<string>('09:00');
-  const [priority, setPriority] = useState<Piority | ''>('');
+export default function TaskForm({ task, onSubmit, onCancel, onToggleCompletion, onSendToCompleted, currentContext }: TaskFormProps) {
+  const isEditMode = !!task;
+  const [taskName, setTaskName] = useState(task?.name || '');
+  const [description, setDescription] = useState(task?.description || '');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    task?.due_date ? new Date(task.due_date) : new Date()
+  );
+  const [selectedTime, setSelectedTime] = useState<string>(
+    task?.reminder_date ? new Date(task.reminder_date).toTimeString().slice(0, 5) : '09:00'
+  );
+  const [priority, setPriority] = useState<Piority | ''>(task?.piority || '');
   const [isPriorityOpen, setIsPriorityOpen] = useState(false);
-  const [reminderDate, setReminderDate] = useState<Date | undefined>(undefined);
-  const [reminderTime, setReminderTime] = useState<string>('09:00');
+  const [reminderDate, setReminderDate] = useState<Date | undefined>(
+    task?.reminder_date ? new Date(task.reminder_date) : undefined
+  );
+  const [reminderTime, setReminderTime] = useState<string>(
+    task?.reminder_date ? new Date(task.reminder_date).toTimeString().slice(0, 5) : '09:00'
+  );
   const [isReminderOpen, setIsReminderOpen] = useState(false);
+  const [duration, setDuration] = useState(task?.duration_in_minutes || 15);
+  const [repeat, setRepeat] = useState<string>(task?.repeat || '');
 
   const priorityOptions: Array<{ value: Piority; label: string; color: string }> = [
     { value: 'low', label: 'Low Priority', color: 'text-gray-500' },
@@ -49,6 +67,14 @@ export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFor
     { value: 'high', label: 'High Priority', color: 'text-orange-500' },
     { value: 'urgent', label: 'Urgent', color: 'text-red-500' },
     { value: 'emergency', label: 'Emergency', color: 'text-red-700' }
+  ];
+
+  const repeatOptions = [
+    { value: '', label: 'No repeat' },
+    { value: 'every day', label: 'Every day' },
+    { value: 'every week', label: 'Every week' },
+    { value: 'every month', label: 'Every month' },
+    { value: 'every year', label: 'Every year' },
   ];
 
   // Generate time options every 15 minutes
@@ -226,14 +252,15 @@ export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFor
       name: taskName,
       description: description || null,
       due_date: dueDateString,
-      piority: priority || 'low',
+      piority: priority || 'medium',
       completed: false,
       totally_completed: false,
       current_view: currentView,
       project_id: projectId,
       section_id: sectionId,
-      // Add reminder data (you may need to extend TaskItem interface to include reminder_date)
-      reminder_date: reminderDateString || undefined
+      reminder_date: reminderDateString || undefined,
+      duration_in_minutes: duration,
+      repeat: repeat || undefined
     };
     onSubmit?.(task);
   };
@@ -244,7 +271,7 @@ export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFor
   };
 
   return (
-    <div className="w-full bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+    <div className="w-full">
       {/* Task Name Input */}
       <div className="mb-3">
         <Input
@@ -265,7 +292,106 @@ export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFor
         />
       </div>
 
-      {/* Action Buttons Row */}
+      {/* Action Buttons - Row 1: Duration and Repeat */}
+      <div className="flex items-center gap-2 mb-3">
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`h-8 px-3 text-sm w-[120px] justify-start ${
+                duration !== 15
+                  ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                  : ''
+              }`}
+            >
+              <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
+              <span className="truncate">
+                {Math.floor(duration / 60).toString().padStart(2, '0')}:{(duration % 60).toString().padStart(2, '0')}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-3" align="start">
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-gray-700">Duration</label>
+              <div className="flex items-center space-x-2">
+                <div className="flex-1">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="8"
+                    value={Math.floor(duration / 60)}
+                    onChange={(e) => {
+                      const hours = parseInt(e.target.value) || 0;
+                      const minutes = duration % 60;
+                      setDuration(hours * 60 + minutes);
+                    }}
+                    className="text-center"
+                    placeholder="00"
+                  />
+                  <p className="text-xs text-gray-500 text-center mt-1">hours</p>
+                </div>
+                <span className="text-gray-500 font-medium">:</span>
+                <div className="flex-1">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="59"
+                    step="5"
+                    value={duration % 60}
+                    onChange={(e) => {
+                      const minutes = parseInt(e.target.value) || 0;
+                      const hours = Math.floor(duration / 60);
+                      setDuration(hours * 60 + minutes);
+                    }}
+                    className="text-center"
+                    placeholder="00"
+                  />
+                  <p className="text-xs text-gray-500 text-center mt-1">minutes</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Default: 00 hours 15 minutes</p>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`h-8 px-3 text-sm w-[120px] justify-start ${
+                repeat
+                  ? 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
+                  : ''
+              }`}
+            >
+              <Repeat className="h-4 w-4 mr-2 flex-shrink-0" />
+              <span className="truncate">
+                {repeat ? repeatOptions.find(opt => opt.value === repeat)?.label || repeat : 'No repeat'}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-1" align="start">
+            <div className="space-y-1">
+              {repeatOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setRepeat(option.value)}
+                  className="w-full flex items-center gap-2 px-2 py-2 text-sm hover:bg-gray-100 rounded-md text-left"
+                >
+                  <Repeat className="h-4 w-4 text-gray-500" />
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+      </div>
+
+      {/* Action Buttons - Row 2: Due date, Priority, Reminder */}
       <div className="flex items-center gap-2 mb-4">
         {/* Date Button with Calendar Popup */}
         <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
@@ -332,7 +458,6 @@ export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFor
             </div>
           </PopoverContent>
         </Popover>
-
 
         {/* Priority Dropdown */}
         <Popover open={isPriorityOpen} onOpenChange={setIsPriorityOpen}>
@@ -507,11 +632,64 @@ export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFor
           </SelectContent>
         </Select>
 
+        {/* Completion Status Actions - Only in Edit Mode */}
+        {isEditMode && (
+          <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Task Status</h3>
+            <div className="flex items-center gap-3">
+              {/* State 1: Not Completed */}
+              {!task?.completed && !task?.totally_completed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onToggleCompletion?.(task.id, true)}
+                  className="flex items-center gap-2 text-green-600 border-green-200 hover:bg-green-50"
+                >
+                  <Check className="h-4 w-4" />
+                  Set as completed
+                </Button>
+              )}
+
+              {/* State 2: Completed (but not totally completed) */}
+              {task?.completed && !task?.totally_completed && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onToggleCompletion?.(task.id, false)}
+                    className="flex items-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Set as not completed
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onSendToCompleted?.(task.id)}
+                    className="flex items-center gap-2 text-purple-600 border-purple-200 hover:bg-purple-50"
+                  >
+                    <Archive className="h-4 w-4" />
+                    Send to completed list
+                  </Button>
+                </>
+              )}
+
+              {/* State 3: Totally Completed */}
+              {task?.totally_completed && (
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Archive className="h-4 w-4" />
+                  <span className="text-sm">Task is in completed list</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onCancel}
             className="text-gray-600 hover:text-gray-800"
           >
@@ -530,7 +708,7 @@ export default function TaskForm({ onSubmit, onCancel, currentContext }: TaskFor
               'bg-gray-400 hover:bg-gray-500'
             }`}
           >
-            Add task
+            {isEditMode ? 'Update task' : 'Add task'}
           </Button>
         </div>
       </div>

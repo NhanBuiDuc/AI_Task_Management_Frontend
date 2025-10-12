@@ -21,7 +21,7 @@ export const enhancedTaskApi = {
   },
 
   // Update task with event emission
-  async updateTask(taskId: string, updates: Partial<Pick<TaskItem, 'name' | 'description' | 'due_date' | 'piority'>>): Promise<TaskItem> {
+  async updateTask(taskId: string, updates: Partial<Pick<TaskItem, 'name' | 'description' | 'due_date' | 'piority' | 'duration_in_minutes' | 'repeat'>>): Promise<TaskItem> {
     try {
       console.log('Updating task:', taskId, updates);
       const updatedTask = await taskApi.updateTask(taskId, updates);

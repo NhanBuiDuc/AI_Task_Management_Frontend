@@ -1,13 +1,39 @@
 "use client"
-import { TaskCreationForm as TaskCreationPanel } from "../tasks/task-creation-form"
-import { TaskDetailModal } from "../tasks/task-detail-modal"
+import TaskForm from "@/components/ui/task_form"
+import { TaskDetailModal } from "./task-detail-modal"
 import { Button } from "@/components/ui/button"
-import { Plus, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, MoreHorizontal, Flag } from "lucide-react"
 import type { CalendarEvent, CalendarViewType } from "@/pages/ComprehensiveCalendar"
+import type { TaskItem } from "@/types"
 import { useState } from "react"
+import { useTaskCompletion } from "@/hooks/useTaskCompletion"
+
+// Priority utility functions (matching task_card.tsx)
+const getPriorityFlagColor = (priority: string) => {
+  switch (priority) {
+    case 'low': return 'text-priority-low';
+    case 'medium': return 'text-priority-medium';
+    case 'high': return 'text-priority-high';
+    case 'urgent': return 'text-priority-urgent';
+    case 'emergency': return 'text-priority-emergency';
+    default: return 'text-gray-400';
+  }
+};
+
+const getPriorityText = (priority: string) => {
+  switch (priority) {
+    case 'low': return 'Low';
+    case 'medium': return 'Medium';
+    case 'high': return 'High';
+    case 'urgent': return 'Urgent';
+    case 'emergency': return 'Emergency';
+    default: return 'None';
+  }
+};
 
 interface CalendarViewProps {
   events: CalendarEvent[]
+  tasks: TaskItem[]
   currentDate: Date
   onDateChange: (date: Date) => void
   viewType: CalendarViewType
@@ -16,10 +42,13 @@ interface CalendarViewProps {
   onCreateTask?: (date: Date, title: string) => void
   onToggleTask?: (id: string) => void
   onUpdateTask?: (id: string, updates: any) => void
+  onToggleCompletion?: (taskId: string, completed: boolean) => void
+  onSendToCompleted?: (taskId: string) => void
 }
 
 export function CalendarMainView({
   events,
+  tasks,
   currentDate,
   onDateChange,
   viewType,
@@ -28,15 +57,28 @@ export function CalendarMainView({
   onCreateTask,
   onToggleTask,
   onUpdateTask,
+  onToggleCompletion,
+  onSendToCompleted,
 }: CalendarViewProps) {
   const [showTaskPanel, setShowTaskPanel] = useState(false)
   const [showTaskDetail, setShowTaskDetail] = useState(false)
-  const [selectedTask, setSelectedTask] = useState<any>(null)
+  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null)
+
+  // Use the universal completion hook
+  const { handleTaskCompletion, handleSendToCompleted } = useTaskCompletion({
+    onUpdateTask: (taskId: string, updates: any) => {
+      // Update task via the parent component's update handler
+      if (onUpdateTask) {
+        onUpdateTask(taskId, updates);
+      }
+    },
+    onDataRefresh: undefined // Calendar handles refresh through other means
+  })
 
   const handleTaskCreation = (taskData: any) => {
-    if (taskData.title.trim() && taskData.date && onCreateTask) {
-      const taskDate = new Date(taskData.date + "T" + (taskData.startTime || "09:00"))
-      onCreateTask(taskDate, taskData.title.trim())
+    if (taskData.name && taskData.name.trim() && taskData.due_date && onCreateTask) {
+      const taskDate = new Date(taskData.due_date)
+      onCreateTask(taskDate, taskData.name.trim())
       setShowTaskPanel(false)
     }
   }
@@ -47,15 +89,40 @@ export function CalendarMainView({
 
   const openTaskDetail = (event: CalendarEvent) => {
     if (event.isTask && event.taskId) {
-      const task = {
-        id: event.taskId,
-        title: event.title.replace("📋 ", ""),
-        completed: false,
-        dueDate: event.start,
-        priority: "high",
+      // Find the actual task from the tasks array
+      const actualTask = tasks.find(task => task.id === event.taskId);
+
+      if (actualTask) {
+        setSelectedTask(actualTask);
+        setShowTaskDetail(true);
+      } else {
+        console.warn(`Task with ID ${event.taskId} not found in tasks array`);
       }
-      setSelectedTask(task)
-      setShowTaskDetail(true)
+    }
+  }
+
+  // Updated completion handler functions using universal hook
+  const handleToggleCompletion = async (taskId: string, completed: boolean) => {
+    if (selectedTask) {
+      try {
+        await handleTaskCompletion(selectedTask, completed, 'calendar' as any)
+        // Update the selected task state to reflect the change
+        setSelectedTask({ ...selectedTask, completed })
+      } catch (error) {
+        console.error('Error toggling completion in calendar:', error)
+      }
+    }
+  }
+
+  const handleSendToCompletedWrapper = async (taskId: string) => {
+    if (selectedTask) {
+      try {
+        await handleSendToCompleted(selectedTask)
+        // Update the selected task state to reflect the change
+        setSelectedTask({ ...selectedTask, totally_completed: true })
+      } catch (error) {
+        console.error('Error sending to completed in calendar:', error)
+      }
     }
   }
 
@@ -339,8 +406,13 @@ export function CalendarMainView({
                         }
                       }}
                     >
-                      {event.start.getHours().toString().padStart(2, "0")}:
-                      {event.start.getMinutes().toString().padStart(2, "0")} {event.title.replace("📋 ", "")}
+                      <div className="flex items-center gap-1">
+                        {event.start.getHours().toString().padStart(2, "0")}:
+                        {event.start.getMinutes().toString().padStart(2, "0")} {event.title.replace("📋 ", "")}
+                        {event.priority && (
+                          <Flag className={`h-2 w-2 ${getPriorityFlagColor(event.priority)}`} />
+                        )}
+                      </div>
                     </div>
                   ))}
                   {dayEvents.length > 3 && (
@@ -427,7 +499,12 @@ export function CalendarMainView({
                           }
                         }}
                       >
-                        <div className="font-medium truncate">{event.title.replace("📋 ", "")}</div>
+                        <div className="flex items-center gap-1">
+                          <div className="font-medium truncate">{event.title.replace("📋 ", "")}</div>
+                          {event.priority && (
+                            <Flag className={`h-3 w-3 ${getPriorityFlagColor(event.priority)}`} />
+                          )}
+                        </div>
                         <div className="text-xs opacity-90">
                           {event.start.getHours().toString().padStart(2, "0")}:
                           {event.start.getMinutes().toString().padStart(2, "0")} -
@@ -499,7 +576,12 @@ export function CalendarMainView({
                       }
                     }}
                   >
-                    <div className="font-medium text-sm">{event.title.replace("📋 ", "")}</div>
+                    <div className="flex items-center gap-1">
+                      <div className="font-medium text-sm">{event.title.replace("📋 ", "")}</div>
+                      {event.priority && (
+                        <Flag className={`h-3 w-3 ${getPriorityFlagColor(event.priority)}`} />
+                      )}
+                    </div>
                     <div className="text-xs opacity-90 mt-1">
                       {event.start.getHours().toString().padStart(2, "0")}:
                       {event.start.getMinutes().toString().padStart(2, "0")}
@@ -585,8 +667,13 @@ export function CalendarMainView({
                           </div>
                           <div className={`w-3 h-3 rounded ${event.color} flex-shrink-0`} />
                           <div className="flex-1">
-                            <div className="font-medium text-sm group-hover:text-primary transition-colors">
-                              {event.title.replace("📋 ", "")}
+                            <div className="flex items-center gap-1">
+                              <div className="font-medium text-sm group-hover:text-primary transition-colors">
+                                {event.title.replace("📋 ", "")}
+                              </div>
+                              {event.priority && (
+                                <Flag className={`h-3 w-3 ${getPriorityFlagColor(event.priority)}`} />
+                              )}
                             </div>
                           </div>
                         </div>
@@ -650,7 +737,12 @@ export function CalendarMainView({
                           }
                         }}
                       >
-                        <div className="font-medium truncate">{event.title.replace("📋 ", "")}</div>
+                        <div className="flex items-center gap-1">
+                          <div className="font-medium truncate">{event.title.replace("📋 ", "")}</div>
+                          {event.priority && (
+                            <Flag className={`h-3 w-3 ${getPriorityFlagColor(event.priority)}`} />
+                          )}
+                        </div>
                         <div className="text-xs opacity-90">
                           {event.start.getHours().toString().padStart(2, "0")}:
                           {event.start.getMinutes().toString().padStart(2, "0")}
@@ -722,8 +814,13 @@ export function CalendarMainView({
                         }
                       }}
                     >
-                      {event.start.getHours().toString().padStart(2, "0")}:
-                      {event.start.getMinutes().toString().padStart(2, "0")} {event.title.replace("📋 ", "")}
+                      <div className="flex items-center gap-1">
+                        {event.start.getHours().toString().padStart(2, "0")}:
+                        {event.start.getMinutes().toString().padStart(2, "0")} {event.title.replace("📋 ", "")}
+                        {event.priority && (
+                          <Flag className={`h-2 w-2 ${getPriorityFlagColor(event.priority)}`} />
+                        )}
+                      </div>
                     </div>
                   ))}
                   {dayEvents.length > 2 && (
@@ -797,13 +894,32 @@ export function CalendarMainView({
         </div>
       </div>
 
-      <TaskCreationPanel
-        isOpen={showTaskPanel}
-        onClose={() => setShowTaskPanel(false)}
-        onSubmit={handleTaskCreation}
-        title="Add Event"
-        icon="📅"
-      />
+      {showTaskPanel && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Add Task</h2>
+              <button
+                onClick={() => setShowTaskPanel(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <TaskForm
+                onSubmit={handleTaskCreation}
+                onCancel={() => setShowTaskPanel(false)}
+                currentContext={{
+                  view: 'inbox'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <TaskDetailModal
         isOpen={showTaskDetail}
@@ -813,6 +929,8 @@ export function CalendarMainView({
         }}
         task={selectedTask}
         onUpdateTask={onUpdateTask || (() => {})}
+        onToggleCompletion={onToggleCompletion || (() => {})}
+        onSendToCompleted={onSendToCompleted || (() => {})}
       />
 
       {viewType === "month" ? (

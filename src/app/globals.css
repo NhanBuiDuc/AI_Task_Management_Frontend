@@ -84,6 +84,13 @@
   --sidebar-background: #FCFAF8;
   --sidebar-active: #FFEFE5;
   --sidebar-text: #DC4C3E;
+
+  /* Priority flag colors */
+  --priority-low: oklch(0.556 0 0);
+  --priority-medium: oklch(0.646 0.222 225);
+  --priority-high: oklch(0.646 0.222 41.116);
+  --priority-urgent: oklch(0.577 0.245 27.325);
+  --priority-emergency: oklch(0.445 0.245 27.325);
 }
 
 .dark {
@@ -121,6 +128,13 @@
   --sidebar-background: #FCFAF8;
   --sidebar-active: #FFEFE5;
   --sidebar-text: #DC4C3E;
+
+  /* Priority flag colors - dark mode */
+  --priority-low: oklch(0.708 0 0);
+  --priority-medium: oklch(0.696 0.17 225);
+  --priority-high: oklch(0.769 0.188 70.08);
+  --priority-urgent: oklch(0.704 0.191 22.216);
+  --priority-emergency: oklch(0.627 0.265 15);
 }
 
 @layer base {
@@ -135,5 +149,22 @@
 @layer utilities {
   .w-sidebar {
     width: var(--sidebar-width);
+  }
+
+  /* Priority flag color utilities */
+  .text-priority-low {
+    color: var(--priority-low);
+  }
+  .text-priority-medium {
+    color: var(--priority-medium);
+  }
+  .text-priority-high {
+    color: var(--priority-high);
+  }
+  .text-priority-urgent {
+    color: var(--priority-urgent);
+  }
+  .text-priority-emergency {
+    color: var(--priority-emergency);
   }
 }

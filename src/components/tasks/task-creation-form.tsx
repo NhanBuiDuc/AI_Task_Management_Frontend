@@ -19,22 +19,20 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
   const [taskTitle, setTaskTitle] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedTime, setSelectedTime] = useState('09:00');
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('10:00');
-  const [priority, setPriority] = useState('3');
-  const [repeat, setRepeat] = useState('none');
+  const [duration, setDuration] = useState(15);
+  const [priority, setPriority] = useState('medium');
+  const [repeat, setRepeat] = useState('');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const handleSubmit = () => {
     if (taskTitle.trim() && selectedDate) {
       const taskData = {
-        title: taskTitle,
-        date: selectedDate.toISOString().split('T')[0],
-        dueTime: selectedTime,
-        startTime,
-        endTime,
-        priority,
-        repeat,
+        name: taskTitle,
+        due_date: selectedDate.toISOString().split('T')[0],
+        reminder_date: `${selectedDate.toISOString().split('T')[0]}T${selectedTime}:00`,
+        duration_in_minutes: duration,
+        piority: priority,
+        repeat: repeat || undefined,
       };
       onSubmit(taskData);
       handleReset();
@@ -45,10 +43,9 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
     setTaskTitle('');
     setSelectedDate(new Date());
     setSelectedTime('09:00');
-    setStartTime('09:00');
-    setEndTime('10:00');
-    setPriority('3');
-    setRepeat('none');
+    setDuration(15);
+    setPriority('medium');
+    setRepeat('');
   };
 
   const formatDate = (date: Date) => {
@@ -60,18 +57,19 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
   };
 
   const priorityOptions = [
-    { value: '1', label: 'Priority 1', color: 'text-red-500' },
-    { value: '2', label: 'Priority 2', color: 'text-orange-500' },
-    { value: '3', label: 'Priority 3', color: 'text-blue-500' },
-    { value: '4', label: 'Priority 4', color: 'text-gray-500' },
+    { value: 'low', label: 'Low', color: 'text-gray-500' },
+    { value: 'medium', label: 'Medium', color: 'text-blue-500' },
+    { value: 'high', label: 'High', color: 'text-orange-500' },
+    { value: 'urgent', label: 'Urgent', color: 'text-red-500' },
+    { value: 'emergency', label: 'Emergency', color: 'text-red-700' },
   ];
 
   const repeatOptions = [
-    { value: 'none', label: 'No repeat' },
-    { value: 'daily', label: 'Every day' },
-    { value: 'weekly', label: 'Every week' },
-    { value: 'monthly', label: 'Every month' },
-    { value: 'yearly', label: 'Every year' },
+    { value: '', label: 'No repeat' },
+    { value: 'every day', label: 'Every day' },
+    { value: 'every week', label: 'Every week' },
+    { value: 'every month', label: 'Every month' },
+    { value: 'every year', label: 'Every year' },
   ];
 
   return (
@@ -145,36 +143,25 @@ export function TaskCreationForm({ isOpen, onClose, onSubmit, title = "Create Ta
             </Popover>
           </div>
 
-          {/* Time Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Start Time
-              </label>
-              <div className="relative">
-                <Clock className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-                <Input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+          {/* Duration Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Duration (minutes)
+            </label>
+            <div className="relative">
+              <Clock className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
+              <Input
+                type="number"
+                min="1"
+                max="480"
+                step="5"
+                value={duration}
+                onChange={(e) => setDuration(parseInt(e.target.value) || 15)}
+                className="pl-10"
+                placeholder="15"
+              />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                End Time
-              </label>
-              <div className="relative">
-                <Clock className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-                <Input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
+            <p className="text-xs text-gray-500 mt-1">Default: 15 minutes</p>
           </div>
 
           {/* Priority Selection */}

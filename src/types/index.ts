@@ -31,6 +31,8 @@ export interface TaskItem{
   piority: Piority;
   reminder_date?: string; // Optional reminder date with time
   completed_date: string;
+  duration_in_minutes?: number;
+  repeat?: string;
 }
 
 export interface SectionItem{
@@ -49,3 +51,5 @@ export type ButtonVariant = "default" | "destructive" | "outline" | "secondary" 
 export type View = "calendar" | "inbox" | "today" | "upcoming" | "project" | "overdue";
 
 export type Piority = "low" | "medium" | "high" | "urgent" | "emergency"
+
+export type RepeativeFrequency = "every_day" | "every_week" | "every_month" | "every_year"

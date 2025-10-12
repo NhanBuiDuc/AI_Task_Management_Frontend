@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TaskItem } from '@/types';
-import { TaskDetailModal } from '@/components/tasks/task-detail-modal';
+import { TaskDetailModal } from '@/components/ui/task-detail-modal';
 import { taskApi } from '@/lib/api/task';
 import { enhancedTaskApi } from '@/lib/api/enhancedTaskApi';
 import { sectionApi } from '@/lib/api/section';
+import { useTaskCompletion } from '@/hooks/useTaskCompletion';
 import {
   GripVertical,
   Edit3,
@@ -12,7 +13,8 @@ import {
   MessageSquare,
   MoreHorizontal,
   Calendar,
-  Lock
+  Lock,
+  Flag
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -20,13 +22,37 @@ interface TaskCardProps {
   onUpdateTask: (taskId: string, updates: Partial<TaskItem>) => void;
   onDataRefresh?: () => Promise<void>;
   viewContext?: 'inbox' | 'today' | 'upcoming' | 'project' | 'completed';
+  // Drag and drop props
+  onTaskReorder?: (taskId: string, originalIndex: number, newIndex: number) => void;
+  onTaskMoveToSection?: (taskId: string, targetSectionId: string) => void;
+  taskIndex?: number;
+  sectionId?: string;
+  isDragDisabled?: boolean;
 }
 
-export function TaskCard({ task, onUpdateTask, onDataRefresh, viewContext }: TaskCardProps) {
+export function TaskCard({
+  task,
+  onUpdateTask,
+  onDataRefresh,
+  viewContext,
+  onTaskReorder,
+  onTaskMoveToSection,
+  taskIndex,
+  sectionId,
+  isDragDisabled = false
+}: TaskCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
-  // Priority color mapping
-  const getPriorityColor = (priority: string) => {
+  // Use the universal completion hook
+  const { handleTaskCompletion, handleSendToCompleted } = useTaskCompletion({
+    onUpdateTask,
+    onDataRefresh
+  });
+
+  // Priority color mapping for task text
+  const getPriorityTextColor = (priority: string) => {
     switch (priority) {
       case 'low': return 'text-gray-500';
       case 'medium': return 'text-blue-500';
@@ -34,6 +60,30 @@ export function TaskCard({ task, onUpdateTask, onDataRefresh, viewContext }: Tas
       case 'urgent': return 'text-red-500';
       case 'emergency': return 'text-red-700';
       default: return 'text-gray-900';
+    }
+  };
+
+  // Priority flag color mapping using global CSS variables
+  const getPriorityFlagColor = (priority: string) => {
+    switch (priority) {
+      case 'low': return 'text-priority-low';
+      case 'medium': return 'text-priority-medium';
+      case 'high': return 'text-priority-high';
+      case 'urgent': return 'text-priority-urgent';
+      case 'emergency': return 'text-priority-emergency';
+      default: return 'text-gray-400';
+    }
+  };
+
+  // Get priority display text
+  const getPriorityText = (priority: string) => {
+    switch (priority) {
+      case 'low': return 'Low';
+      case 'medium': return 'Medium';
+      case 'high': return 'High';
+      case 'urgent': return 'Urgent';
+      case 'emergency': return 'Emergency';
+      default: return 'None';
     }
   };
 
@@ -60,136 +110,18 @@ export function TaskCard({ task, onUpdateTask, onDataRefresh, viewContext }: Tas
   };
 
   const handleToggleComplete = async () => {
-    console.log('DEBUG: handleToggleComplete called for task:', task.id, 'completed:', task.completed, 'viewContext:', viewContext);
+    console.log('DEBUG: TaskCard handleToggleComplete called for task:', task.id, 'completed:', task.completed, 'viewContext:', viewContext);
     try {
       if (!task.completed) {
-        console.log('DEBUG: First click - marking as completed');
-        // First click: Mark as completed and move to "Completed" section
-
-        // Special handling for Today view - move to Today completed section
-        if (viewContext === 'today') {
-          console.log('DEBUG: Today view - getting/creating Completed section for Today');
-          // Get or create "Completed" section for Today view
-          const { section, created } = await sectionApi.getOrCreateTodayCompletedSection();
-          console.log('DEBUG: Got completed section for Today:', section, 'created:', created);
-
-          // Move task to completed section and mark as completed
-          console.log('DEBUG: Moving task to section:', section.id);
-          await enhancedTaskApi.moveTaskToSection(task.id, section.id);
-
-          console.log('DEBUG: Marking task as completed');
-          await enhancedTaskApi.updateTaskCompletion(task.id, true);
-
-          // Update local state
-          console.log('DEBUG: Updating local state');
-          onUpdateTask(task.id, {
-            completed: true,
-            section_id: section.id
-          });
-
-          // Trigger data refresh if a new "Completed" section was created
-          if (created && onDataRefresh) {
-            console.log('DEBUG: Triggering data refresh to show new Completed section');
-            await onDataRefresh();
-          }
-        } else if (viewContext === 'upcoming') {
-          console.log('DEBUG: Upcoming view - getting/creating Completed section for Upcoming');
-          // Get or create "Completed" section for Upcoming view
-          const { section, created } = await sectionApi.getOrCreateUpcomingCompletedSection();
-          console.log('DEBUG: Got completed section for Upcoming:', section, 'created:', created);
-
-          // Move task to completed section and mark as completed
-          console.log('DEBUG: Moving task to section:', section.id);
-          await enhancedTaskApi.moveTaskToSection(task.id, section.id);
-
-          console.log('DEBUG: Marking task as completed');
-          await enhancedTaskApi.updateTaskCompletion(task.id, true);
-
-          // Update local state
-          console.log('DEBUG: Updating local state');
-          onUpdateTask(task.id, {
-            completed: true,
-            section_id: section.id
-          });
-
-          // Trigger data refresh if a new "Completed" section was created
-          if (created && onDataRefresh) {
-            console.log('DEBUG: Triggering data refresh to show new Completed section');
-            await onDataRefresh();
-          }
-        } else if (task.project_id) {
-          console.log('DEBUG: Project task - getting/creating Completed section for project:', task.project_id);
-          // Get or create "Completed" section for this project
-          const { section, created } = await sectionApi.getOrCreateCompletedSection(task.project_id);
-          console.log('DEBUG: Got completed section:', section, 'created:', created);
-
-          // Move task to completed section and mark as completed
-          console.log('DEBUG: Moving task to section:', section.id);
-          await enhancedTaskApi.moveTaskToSection(task.id, section.id);
-
-          console.log('DEBUG: Marking task as completed');
-          await enhancedTaskApi.updateTaskCompletion(task.id, true);
-
-          // Update local state
-          console.log('DEBUG: Updating local state');
-          onUpdateTask(task.id, {
-            completed: true,
-            section_id: section.id
-          });
-
-          // Trigger data refresh only if a new "Completed" section was created
-          if (created && onDataRefresh) {
-            console.log('DEBUG: Triggering data refresh to show new Completed section');
-            await onDataRefresh();
-          }
-        } else {
-          console.log('DEBUG: Inbox task - getting/creating Completed section for Inbox');
-          // For Inbox tasks, get or create "Completed" section with project_id = null
-          const { section, created } = await sectionApi.getOrCreateInboxCompletedSection();
-          console.log('DEBUG: Got completed section for Inbox:', section, 'created:', created);
-
-          // Move task to completed section and mark as completed
-          console.log('DEBUG: Moving task to section:', section.id);
-          await enhancedTaskApi.moveTaskToSection(task.id, section.id);
-
-          console.log('DEBUG: Marking task as completed');
-          await enhancedTaskApi.updateTaskCompletion(task.id, true);
-
-          // Update local state
-          console.log('DEBUG: Updating local state');
-          onUpdateTask(task.id, {
-            completed: true,
-            section_id: section.id
-          });
-
-          // Trigger data refresh only if a new "Completed" section was created
-          if (created && onDataRefresh) {
-            console.log('DEBUG: Triggering data refresh to show new Completed section');
-            await onDataRefresh();
-          }
-        }
+        // First click: Mark as completed and move to appropriate completed section
+        await handleTaskCompletion(task, true, viewContext);
       } else {
-        console.log('DEBUG: Second click - marking as totally completed');
         // Second click: Mark as totally completed (task will disappear)
-        console.log('DEBUG: Calling updateTaskTotalCompletion for task:', task.id);
-        const result = await enhancedTaskApi.updateTaskTotalCompletion(task.id, true);
-        console.log('DEBUG: updateTaskTotalCompletion result:', result);
-
-        // Remove from view by setting totally_completed and detaching from section
-        onUpdateTask(task.id, {
-          totally_completed: true,
-          section_id: null
-        });
-
-        // Trigger data refresh to remove the totally_completed task from view
-        if (onDataRefresh) {
-          console.log('DEBUG: Triggering data refresh to remove totally_completed task from view');
-          await onDataRefresh();
-        }
+        await handleSendToCompleted(task);
       }
-      console.log('DEBUG: handleToggleComplete completed successfully');
+      console.log('DEBUG: TaskCard handleToggleComplete completed successfully');
     } catch (error) {
-      console.error('Error updating task completion:', error);
+      console.error('Error updating task completion in TaskCard:', error);
       // Optionally show an error message to the user
     }
   };
@@ -198,14 +130,145 @@ export function TaskCard({ task, onUpdateTask, onDataRefresh, viewContext }: Tas
     setIsModalOpen(true);
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent) => {
+    if (isDragDisabled) {
+      e.preventDefault();
+      return;
+    }
+
+    setIsDragging(true);
+    const dragData = {
+      taskId: task.id,
+      taskName: task.name,
+      originalSectionId: sectionId || task.section_id,
+      originalIndex: taskIndex || 0,
+      task: task
+    };
+
+    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'move';
+
+    // Add a subtle drag image
+    if (e.currentTarget instanceof HTMLElement) {
+      const dragImage = e.currentTarget.cloneNode(true) as HTMLElement;
+      dragImage.style.opacity = '0.8';
+      dragImage.style.transform = 'rotate(5deg)';
+      e.dataTransfer.setDragImage(dragImage, 0, 0);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (isDragDisabled) return;
+
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    if (isDragDisabled) return;
+
+    try {
+      const dragData = JSON.parse(e.dataTransfer.getData('application/json'));
+      const { taskId, originalSectionId, originalIndex } = dragData;
+
+      // Don't drop on self
+      if (taskId === task.id) return;
+
+      const currentSectionId = sectionId || task.section_id;
+
+      if (originalSectionId === currentSectionId) {
+        // Reordering within same section
+        let newIndex = taskIndex || 0;
+
+        // Calculate drop position based on mouse position within the task
+        const rect = e.currentTarget.getBoundingClientRect();
+        const mouseY = e.clientY;
+        const taskMiddleY = rect.top + rect.height / 2;
+
+        // If dropping below the middle of the task, insert after (index + 1)
+        if (mouseY > taskMiddleY) {
+          newIndex = newIndex + 1;
+        }
+
+        // Adjust for items being moved from earlier positions
+        if (originalIndex < newIndex) {
+          newIndex = newIndex - 1;
+        }
+
+        console.log('Drop positioning:', {
+          mouseY,
+          taskMiddleY,
+          originalIndex,
+          targetIndex: taskIndex,
+          calculatedNewIndex: newIndex,
+          dropBelow: mouseY > taskMiddleY
+        });
+
+        if (onTaskReorder && originalIndex !== newIndex) {
+          onTaskReorder(taskId, originalIndex, newIndex);
+        }
+      } else {
+        // Moving to different section
+        if (onTaskMoveToSection && currentSectionId) {
+          onTaskMoveToSection(taskId, currentSectionId);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling task drop:', error);
+    }
+  };
+
   return (
     <>
-      <div className="w-full group">
+      <div
+        className={`w-full group transition-all duration-200 ${
+          isDragging ? 'opacity-50 scale-95' : ''
+        } ${
+          isDragOver ? 'bg-blue-50 border-blue-200 border-2 border-dashed rounded-lg' : ''
+        }`}
+        draggable={!isDragDisabled}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {/* Task item */}
         <div className="flex items-center gap-3 py-2">
           {/* Drag handle */}
-          <Button variant="ghost" size="sm" className="p-1 cursor-grab">
-            <GripVertical className="h-4 w-4 text-gray-400" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`p-1 ${
+              isDragDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-grab hover:cursor-grabbing'
+            }`}
+            onMouseDown={(e) => {
+              if (!isDragDisabled) {
+                e.currentTarget.style.cursor = 'grabbing';
+              }
+            }}
+            onMouseUp={(e) => {
+              if (!isDragDisabled) {
+                e.currentTarget.style.cursor = 'grab';
+              }
+            }}
+          >
+            <GripVertical className={`h-4 w-4 ${
+              isDragDisabled ? 'text-gray-300' : 'text-gray-400 group-hover:text-gray-600'
+            }`} />
           </Button>
 
           {/* Checkbox */}
@@ -223,8 +286,17 @@ export function TaskCard({ task, onUpdateTask, onDataRefresh, viewContext }: Tas
 
           {/* Task text - clickable to open modal */}
           <div className="flex-1 cursor-pointer" onClick={handleTaskClick}>
-            <div className={`${task.completed ? 'text-gray-500 line-through' : getPriorityColor(task.piority)} font-normal`}>
-              {task.name}
+            <div className="flex items-center gap-2">
+              <div className={`${task.completed ? 'text-gray-500 line-through' : getPriorityTextColor(task.piority)} font-normal`}>
+                {task.name}
+              </div>
+              {/* Priority flag with color */}
+              <div className="flex items-center gap-1">
+                <Flag className={`h-3 w-3 ${getPriorityFlagColor(task.piority)}`} />
+                <span className={`text-xs font-medium ${getPriorityFlagColor(task.piority)}`}>
+                  {getPriorityText(task.piority)}
+                </span>
+              </div>
             </div>
             {/* Calendar icon with date under task name */}
             {task.due_date && (
@@ -267,6 +339,8 @@ export function TaskCard({ task, onUpdateTask, onDataRefresh, viewContext }: Tas
         onClose={() => setIsModalOpen(false)}
         task={task}
         onUpdateTask={onUpdateTask}
+        onToggleCompletion={(taskId, completed) => handleTaskCompletion(task, completed, viewContext)}
+        onSendToCompleted={() => handleSendToCompleted(task)}
       />
     </>
   );

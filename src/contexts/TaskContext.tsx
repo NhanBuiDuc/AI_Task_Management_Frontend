@@ -5,6 +5,7 @@ interface TaskCounts {
   inbox: number;
   today: number;
   upcoming: number;
+  overdue: number;
   completed: number;
   projects: {[projectId: string]: number};
 }
@@ -23,6 +24,7 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
     inbox: 0,
     today: 0,
     upcoming: 0,
+    overdue: 0,
     completed: 0,
     projects: {}
   });
@@ -56,7 +58,8 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
 
     try {
       // Connect to WebSocket (adjust URL based on your Django server)
-      const ws = new WebSocket('ws://localhost:8000/ws/task-counts/');
+      const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace('http://', 'ws://').replace('/api', '/ws/task-counts/') || 'ws://127.0.0.1:8000/ws/task-counts/';
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -102,9 +105,10 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshTaskCounts]);
 
-  // Load initial task counts and setup WebSocket
+  // Load initial task counts (WebSocket disabled until backend supports it)
   useEffect(() => {
-    connectWebSocket();
+    // Initial load via HTTP API
+    refreshTaskCounts();
 
     // Cleanup on unmount
     return () => {
@@ -115,7 +119,7 @@ export function TaskProvider({ children }: { children: React.ReactNode }) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [connectWebSocket]);
+  }, [refreshTaskCounts]);
 
   const value = {
     taskCounts,

@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { sectionApi } from '@/lib/api/section';
+import { enhancedTaskApi } from '@/lib/api/enhancedTaskApi';
 
 interface SectionDropdownProps {
   section: SectionItem;
@@ -32,16 +33,34 @@ interface SectionDropdownProps {
   onSectionUpdate?: (sectionId: string, updates: Partial<SectionItem>) => void;
   onSectionDelete?: (sectionId: string) => void;
   viewContext?: 'inbox' | 'today' | 'upcoming' | 'project' | 'completed';
+  // Drag and drop props
+  onTaskReorder?: (sectionId: string, taskId: string, originalIndex: number, newIndex: number) => void;
+  onTaskMoveToSection?: (taskId: string, sourceSectionId: string, targetSectionId: string) => void;
+  isDragDisabled?: boolean;
 }
 
 // Section Component
-export function SectionDropdown({ section, tasks, onUpdateTask, onToggleSection, isExpanded, onDataRefresh, onSectionUpdate, onSectionDelete, viewContext }: SectionDropdownProps) {
+export function SectionDropdown({
+  section,
+  tasks,
+  onUpdateTask,
+  onToggleSection,
+  isExpanded,
+  onDataRefresh,
+  onSectionUpdate,
+  onSectionDelete,
+  viewContext,
+  onTaskReorder,
+  onTaskMoveToSection,
+  isDragDisabled = false
+}: SectionDropdownProps) {
   const taskCount = tasks.length;
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState(section.name);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDragOverSection, setIsDragOverSection] = useState(false);
 
   const handleRename = async () => {
     if (!newSectionName.trim() || newSectionName === section.name) {
@@ -86,13 +105,64 @@ export function SectionDropdown({ section, tasks, onUpdateTask, onToggleSection,
     setNewSectionName(section.name);
     setIsRenameDialogOpen(true);
   };
+
+  // Drag and drop handlers for section
+  const handleTaskReorder = (taskId: string, originalIndex: number, newIndex: number) => {
+    if (onTaskReorder) {
+      onTaskReorder(section.id, taskId, originalIndex, newIndex);
+    }
+  };
+
+  const handleTaskMoveToSection = (taskId: string, targetSectionId: string) => {
+    if (onTaskMoveToSection) {
+      onTaskMoveToSection(taskId, section.id, targetSectionId);
+    }
+  };
+
+  const handleSectionDragOver = (e: React.DragEvent) => {
+    if (isDragDisabled) return;
+
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDragOverSection(true);
+  };
+
+  const handleSectionDragLeave = () => {
+    setIsDragOverSection(false);
+  };
+
+  const handleSectionDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverSection(false);
+
+    if (isDragDisabled) return;
+
+    try {
+      const dragData = JSON.parse(e.dataTransfer.getData('application/json'));
+      const { taskId, originalSectionId } = dragData;
+
+      // Don't drop if already in this section
+      if (originalSectionId === section.id) return;
+
+      if (onTaskMoveToSection) {
+        onTaskMoveToSection(taskId, originalSectionId, section.id);
+      }
+    } catch (error) {
+      console.error('Error handling section drop:', error);
+    }
+  };
   
   return (
     <div className="mb-4">
       {/* Section Header */}
-      <div 
-        className="flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-gray-50 rounded group"
+      <div
+        className={`flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-gray-50 rounded group transition-all duration-200 ${
+          isDragOverSection ? 'bg-blue-50 border-blue-200 border-2 border-dashed' : ''
+        }`}
         onClick={() => onToggleSection(section.id)}
+        onDragOver={handleSectionDragOver}
+        onDragLeave={handleSectionDragLeave}
+        onDrop={handleSectionDrop}
       >
         <div className="flex items-center gap-2">
           {isExpanded ? (
@@ -135,12 +205,31 @@ export function SectionDropdown({ section, tasks, onUpdateTask, onToggleSection,
                 onUpdateTask={onUpdateTask}
                 onDataRefresh={onDataRefresh}
                 viewContext={viewContext}
+                onTaskReorder={handleTaskReorder}
+                onTaskMoveToSection={handleTaskMoveToSection}
+                taskIndex={index}
+                sectionId={section.id}
+                isDragDisabled={isDragDisabled}
               />
               {index < tasks.length - 1 && (
                 <div className="border-b border-gray-200 my-2"></div>
               )}
             </div>
           ))}
+
+          {/* Drop zone at the end of tasks */}
+          {!isDragDisabled && (
+            <div
+              className="h-8 w-full border-2 border-dashed border-transparent hover:border-gray-300 transition-colors duration-200 flex items-center justify-center text-sm text-gray-400"
+              onDragOver={handleSectionDragOver}
+              onDragLeave={handleSectionDragLeave}
+              onDrop={handleSectionDrop}
+            >
+              <span className="opacity-0 hover:opacity-100 transition-opacity duration-200">
+                Drop task here
+              </span>
+            </div>
+          )}
         </div>
       )}
 

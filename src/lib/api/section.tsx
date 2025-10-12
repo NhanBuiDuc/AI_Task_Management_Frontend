@@ -1,6 +1,6 @@
 import { SectionItem } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
 // Section API functions
 export const sectionApi = {
@@ -258,6 +258,65 @@ export const sectionApi = {
     } catch (error) {
       console.error('Error in getOrCreateUpcomingCompletedSection:', error);
       throw new Error('Failed to get/create upcoming completed section');
+    }
+  },
+
+  // Get overdue sections (project_id = null, current_view = "overdue")
+  async getOverdueSections(): Promise<SectionItem[]> {
+    const response = await fetch(`${API_BASE_URL}/sections/?project_id=null&current_view=overdue`);
+    if (!response.ok) throw new Error('Failed to fetch overdue sections');
+    return response.json();
+  },
+
+  // Create section for Overdue view (project_id = null)
+  async createOverdueSection(name: string): Promise<SectionItem> {
+    const response = await fetch(`${API_BASE_URL}/sections/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name,
+        project_id: null,
+        current_view: ["overdue"]
+      }),
+    });
+    if (!response.ok) throw new Error('Failed to create overdue section');
+    return response.json();
+  },
+
+  // Get or create "Completed" section for Overdue view (project_id = null, current_view = ["overdue"])
+  async getOrCreateOverdueCompletedSection(): Promise<{section: SectionItem, created: boolean}> {
+    try {
+      // First, try to find an existing "Completed" section in Overdue
+      const overdueSectionsResponse = await this.getOverdueSections();
+      const overdueSections = overdueSectionsResponse.results || overdueSectionsResponse;
+
+      const existingCompleted = overdueSections.find(section => section.name === "Completed");
+
+      if (existingCompleted) {
+        return { section: existingCompleted, created: false };
+      }
+
+      // If not found, create a new "Completed" section for Overdue
+      const newSection = await fetch(`${API_BASE_URL}/sections/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: "Completed",
+          project_id: null,
+          current_view: ["overdue"]
+        }),
+      });
+
+      if (!newSection.ok) throw new Error('Failed to create overdue completed section');
+      const createdSection = await newSection.json();
+      return { section: createdSection, created: true };
+    } catch (error) {
+      console.error('Error in getOrCreateOverdueCompletedSection:', error);
+      throw new Error('Failed to get/create overdue completed section');
     }
   },
 };

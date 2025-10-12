@@ -6,10 +6,11 @@ import { ViewHolder } from "@/components/ui/ViewHolder";
 import { Today } from "@/pages/Today";
 import { Inbox } from "@/pages/Inbox";
 import { Upcoming } from "@/pages/Upcoming";
+import { Overdue } from "@/pages/Overdue";
 // import { Projects } from "@/pages/Projects";
 import { ProjectTasks } from "@/pages/ProjectTasks";
 import { ComprehensiveCalendar } from "@/pages/ComprehensiveCalendar";
-import { SearchIcon, Calendar1Icon, CirclePlusIcon, FolderOutputIcon, CalendarClockIcon, EllipsisIcon, FolderIcon, CircleCheckIcon } from "lucide-react"
+import { SearchIcon, Calendar1Icon, CirclePlusIcon, FolderOutputIcon, CalendarClockIcon, EllipsisIcon, FolderIcon, CircleCheckIcon, AlertTriangleIcon } from "lucide-react"
 import { SidebarItem, ProjectItem } from "@/types"
 import Completed from "@/pages/Completed";
 import { projectApi } from "@/lib/api/project";
@@ -22,6 +23,7 @@ const navigationMainFeatures: SidebarItem[] = [
   { id: "inbox", label: "Inbox", icon: FolderOutputIcon, view: Inbox, isView: true},
   { id: "today", label: "Today", icon: Calendar1Icon, view: Today, isView: true},
   { id: "upcoming", label: "Upcoming", icon: CalendarClockIcon, view: Upcoming, isView: true},
+  { id: "overdue", label: "Overdue", icon: AlertTriangleIcon, view: Overdue, isView: true},
   { id: "completed", label: "Completed", icon: CircleCheckIcon, view: Completed, isView: true},
   { id: "more", label: "More", icon: EllipsisIcon, view: null, isView: false}
 ];

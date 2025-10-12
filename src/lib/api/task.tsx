@@ -1,6 +1,6 @@
 import { TaskItem, View, Piority } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
 // Task API functions
 export const taskApi = {
@@ -107,7 +107,7 @@ export const taskApi = {
   },
 
   // Update task information
-  async updateTask(taskId: string, updates: Partial<Pick<TaskItem, 'name' | 'description' | 'due_date' | 'piority'>>): Promise<TaskItem> {
+  async updateTask(taskId: string, updates: Partial<Pick<TaskItem, 'name' | 'description' | 'due_date' | 'piority' | 'duration_in_minutes' | 'repeat'>>): Promise<TaskItem> {
     const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/`, {
       method: 'PATCH',
       headers: {

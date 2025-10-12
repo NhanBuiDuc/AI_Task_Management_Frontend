@@ -19,6 +19,7 @@ export function Inbox() {
   const [expandedSections, setExpandedSections] = useState<{[key: string]: boolean}>({});
   const [showUnsectionedTaskForm, setShowUnsectionedTaskForm] = useState(false);
   const [showSectionTaskForms, setShowSectionTaskForms] = useState<{[key: string]: boolean}>({});
+  const [isDragOverUnsectioned, setIsDragOverUnsectioned] = useState(false);
 
   // Load inbox data on component mount
   useEffect(() => {
@@ -55,10 +56,31 @@ export function Inbox() {
     }
   };
 
-  const updateTask = (taskId: string, updates: Partial<TaskItem>) => {
-    setTasks(tasks.map(task =>
-      task.id === taskId ? { ...task, ...updates } : task
-    ));
+  const updateTask = async (taskId: string, updates: Partial<TaskItem>) => {
+    try {
+      // If task is being marked as totally completed, only update local state
+      // Don't sync with backend as the task is being archived/removed
+      if (updates.totally_completed === true) {
+        // Update local state only
+        setTasks(tasks.map(task =>
+          task.id === taskId ? { ...task, ...updates } : task
+        ));
+        console.log('Task updated locally (totally completed):', taskId, updates);
+        return;
+      }
+
+      // Update task on backend for regular updates
+      await enhancedTaskApi.updateTask(taskId, updates);
+
+      // Update local state
+      setTasks(tasks.map(task =>
+        task.id === taskId ? { ...task, ...updates } : task
+      ));
+
+      console.log('Task updated successfully:', taskId, updates);
+    } catch (error) {
+      console.error('Failed to update task:', error);
+    }
   };
 
   const toggleSection = (sectionId: string) => {
@@ -139,7 +161,107 @@ export function Inbox() {
     }
   };
 
-  // Group tasks by section
+  // Drag and drop handlers
+  const handleTaskReorder = async (sectionId: string, taskId: string, originalIndex: number, newIndex: number) => {
+    try {
+      console.log('Reordering task:', { sectionId, taskId, originalIndex, newIndex });
+
+      if (originalIndex === newIndex) return; // No change needed
+
+      // Get all tasks for this section
+      const sectionTasks = (tasksBySection[sectionId] || []).slice();
+
+      // Find the task being moved
+      const taskToMove = sectionTasks.find(task => task.id === taskId);
+      if (!taskToMove) return;
+
+      // Create the reordered tasks array
+      const reorderedSectionTasks = sectionTasks.slice();
+      reorderedSectionTasks.splice(originalIndex, 1); // Remove from original position
+      reorderedSectionTasks.splice(newIndex, 0, taskToMove); // Insert at new position
+
+      // Update the main tasks array with the new order
+      const updatedTasks = tasks.map(task => {
+        // If task is in this section, find its new position in reordered array
+        if ((task.section_id || 'unsectioned') === sectionId) {
+          const newIndexInSection = reorderedSectionTasks.findIndex(t => t.id === task.id);
+          return { ...task, __tempOrder: newIndexInSection };
+        }
+        return task;
+      });
+
+      setTasks(updatedTasks);
+
+      // TODO: Here you would call an API to update the task order on the backend
+      // For now, we'll just log it
+      console.log('Task reordered locally. Backend sync needed for permanent ordering.', {
+        originalOrder: sectionTasks.map(t => t.name),
+        newOrder: reorderedSectionTasks.map(t => t.name)
+      });
+
+    } catch (error) {
+      console.error('Error reordering task:', error);
+    }
+  };
+
+  const handleTaskMoveToSection = async (taskId: string, sourceSectionId: string, targetSectionId: string) => {
+    try {
+      console.log('Moving task between sections:', { taskId, sourceSectionId, targetSectionId });
+
+      // Handle moving to unsectioned (null section_id)
+      if (targetSectionId === 'unsectioned') {
+        await enhancedTaskApi.makeTaskUnsectioned(taskId);
+        // Update local state
+        setTasks(tasks.map(task =>
+          task.id === taskId ? { ...task, section_id: null } : task
+        ));
+      } else {
+        // Update task section via API
+        await enhancedTaskApi.moveTaskToSection(taskId, targetSectionId);
+        // Update local state
+        setTasks(tasks.map(task =>
+          task.id === taskId ? { ...task, section_id: targetSectionId } : task
+        ));
+      }
+
+      console.log('Task moved to new section successfully');
+
+    } catch (error) {
+      console.error('Error moving task to section:', error);
+      // Optionally revert local state or show error message
+    }
+  };
+
+  // Drag handlers for unsectioned area
+  const handleUnsectionedDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDragOverUnsectioned(true);
+  };
+
+  const handleUnsectionedDragLeave = () => {
+    setIsDragOverUnsectioned(false);
+  };
+
+  const handleUnsectionedDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOverUnsectioned(false);
+
+    try {
+      const dragData = JSON.parse(e.dataTransfer.getData('application/json'));
+      const { taskId, originalSectionId } = dragData;
+
+      // Don't drop if already unsectioned
+      if (originalSectionId === 'unsectioned') return;
+
+      // Move task to unsectioned (null section_id)
+      handleTaskMoveToSection(taskId, originalSectionId, 'unsectioned');
+    } catch (error) {
+      console.error('Error handling unsectioned drop:', error);
+    }
+  };
+
+  // Group tasks by section and sort by temporary order if available
   const tasksBySection = tasks.reduce((acc: {[key: string]: TaskItem[]}, task) => {
     const key = task.section_id || 'unsectioned';
     if (!acc[key]) {
@@ -148,6 +270,21 @@ export function Inbox() {
     acc[key].push(task);
     return acc;
   }, {});
+
+  // Sort each section's tasks by temporary order if set, otherwise keep original order
+  Object.keys(tasksBySection).forEach(sectionId => {
+    tasksBySection[sectionId].sort((a, b) => {
+      // If both have temp order, sort by that
+      if (a.__tempOrder !== undefined && b.__tempOrder !== undefined) {
+        return a.__tempOrder - b.__tempOrder;
+      }
+      // If only one has temp order, it should maintain its position relative to others
+      if (a.__tempOrder !== undefined) return a.__tempOrder;
+      if (b.__tempOrder !== undefined) return b.__tempOrder;
+      // If neither has temp order, maintain original order (no sorting)
+      return 0;
+    });
+  });
 
   // Get unsectioned tasks AND tasks whose sections aren't loaded (cross-view tasks)
   const loadedSectionIds = new Set(sections.map(s => s.id));
@@ -176,7 +313,14 @@ export function Inbox() {
       
       <div className="mb-6">
         {/* Unsectioned Tasks Section - treated as its own section */}
-        <div className="mb-4 bg-gray-50 rounded-lg p-3">
+        <div
+          className={`mb-4 bg-gray-50 rounded-lg p-3 transition-all duration-200 ${
+            isDragOverUnsectioned ? 'bg-blue-50 border-blue-200 border-2 border-dashed' : ''
+          }`}
+          onDragOver={handleUnsectionedDragOver}
+          onDragLeave={handleUnsectionedDragLeave}
+          onDrop={handleUnsectionedDrop}
+        >
           {/* Unsectioned tasks content (includes cross-view tasks) */}
           {allUnsectionedTasks.length > 0 && (
             <div className="mb-3">
@@ -186,6 +330,14 @@ export function Inbox() {
                     task={task}
                     onUpdateTask={updateTask}
                     onDataRefresh={loadInboxData}
+                    onTaskReorder={(taskId, originalIndex, newIndex) =>
+                      handleTaskReorder('unsectioned', taskId, originalIndex, newIndex)
+                    }
+                    onTaskMoveToSection={(taskId, targetSectionId) =>
+                      handleTaskMoveToSection(taskId, 'unsectioned', targetSectionId)
+                    }
+                    taskIndex={index}
+                    sectionId="unsectioned"
                   />
                   {index < allUnsectionedTasks.length - 1 && (
                     <div className="border-b border-gray-200 my-1"></div>
@@ -225,6 +377,11 @@ export function Inbox() {
         {sections.map((section, index) => {
           const sectionTasks = tasksBySection[section.id] || [];
 
+          // Don't render completed sections that have no tasks
+          if (section.name === 'Completed' && sectionTasks.length === 0) {
+            return null;
+          }
+
           return (
             <div key={section.id}>
               <SectionDropdown
@@ -235,6 +392,8 @@ export function Inbox() {
                 isExpanded={expandedSections[section.id]}
                 onSectionDelete={handleDeleteSection}
                 onDataRefresh={loadInboxData}
+                onTaskReorder={handleTaskReorder}
+                onTaskMoveToSection={handleTaskMoveToSection}
               />
 
               {/* Add Task button for this section */}
