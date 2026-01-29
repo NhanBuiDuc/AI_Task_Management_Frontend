@@ -30,6 +30,7 @@ interface TaskFormProps {
   onCancel?: () => void;
   onToggleCompletion?: (taskId: string, completed: boolean) => void;
   onSendToCompleted?: (taskId: string) => void;
+  defaultDate?: Date; // Default date for the due date picker (e.g., from calendar view)
   currentContext?: {
     view: 'inbox' | 'project' | 'today' | 'upcoming' | 'completed';
     projectId?: string;
@@ -39,12 +40,12 @@ interface TaskFormProps {
   };
 }
 
-export default function TaskForm({ task, onSubmit, onCancel, onToggleCompletion, onSendToCompleted, currentContext }: TaskFormProps) {
+export default function TaskForm({ task, onSubmit, onCancel, onToggleCompletion, onSendToCompleted, defaultDate, currentContext }: TaskFormProps) {
   const isEditMode = !!task;
   const [taskName, setTaskName] = useState(task?.name || '');
   const [description, setDescription] = useState(task?.description || '');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    task?.due_date ? new Date(task.due_date) : new Date()
+    task?.due_date ? new Date(task.due_date) : (defaultDate || new Date())
   );
   const [selectedTime, setSelectedTime] = useState<string>(
     task?.reminder_date ? new Date(task.reminder_date).toTimeString().slice(0, 5) : '09:00'

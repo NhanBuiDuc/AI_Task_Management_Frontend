@@ -203,6 +203,9 @@ export function ComprehensiveCalendar() {
       // Invalidate task counts to trigger refresh
       invalidateTaskCounts();
 
+      // Reload tasks to ensure the list is refreshed immediately
+      await loadTasks();
+
     } catch (error) {
       console.error("Failed to create task:", error);
     }
@@ -262,6 +265,34 @@ export function ComprehensiveCalendar() {
     }
   };
 
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      // Skip sample events - they're not real tasks
+      if (taskId.startsWith('sample-')) {
+        console.log("Ignoring delete for sample event:", taskId);
+        return;
+      }
+
+      // Delete the task via API
+      await taskApi.deleteTask(taskId);
+
+      // Remove from local tasks state
+      setTasks(tasks.filter(t => t.id !== taskId));
+
+      // Remove from events
+      setEvents(events.filter(e => e.taskId !== taskId));
+
+      // Invalidate task counts to trigger refresh
+      invalidateTaskCounts();
+
+      // Reload tasks to ensure consistency
+      await loadTasks();
+
+    } catch (error) {
+      console.error("Failed to delete task:", error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen flex flex-col">
@@ -288,6 +319,7 @@ export function ComprehensiveCalendar() {
         onCreateTask={handleCreateTask}
         onToggleTask={handleToggleTask}
         onUpdateTask={handleUpdateTask}
+        onDeleteTask={handleDeleteTask}
         onToggleCompletion={(taskId: string, completed: boolean) => {
           const task = tasks.find(t => t.id === taskId);
           if (task) {

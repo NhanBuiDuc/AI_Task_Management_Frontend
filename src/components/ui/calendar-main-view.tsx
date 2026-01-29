@@ -42,6 +42,7 @@ interface CalendarViewProps {
   onCreateTask?: (date: Date, title: string) => void
   onToggleTask?: (id: string) => void
   onUpdateTask?: (id: string, updates: any) => void
+  onDeleteTask?: (taskId: string) => void
   onToggleCompletion?: (taskId: string, completed: boolean) => void
   onSendToCompleted?: (taskId: string) => void
 }
@@ -57,6 +58,7 @@ export function CalendarMainView({
   onCreateTask,
   onToggleTask,
   onUpdateTask,
+  onDeleteTask,
   onToggleCompletion,
   onSendToCompleted,
 }: CalendarViewProps) {
@@ -269,7 +271,7 @@ export function CalendarMainView({
 
   const generateTimeSlots = () => {
     const slots = []
-    for (let hour = 7; hour <= 19; hour++) {
+    for (let hour = 0; hour <= 23; hour++) {
       slots.push(hour)
     }
     return slots
@@ -340,12 +342,18 @@ export function CalendarMainView({
   }
 
   const getUpcomingEvents = () => {
-    const today = new Date()
-    const nextWeek = new Date(today)
-    nextWeek.setDate(today.getDate() + 7)
+    // Get start of current week (Sunday) based on currentDate
+    const startOfWeek = new Date(currentDate)
+    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay())
+    startOfWeek.setHours(0, 0, 0, 0)
+
+    // Get end of next week (14 days from start of current week)
+    const endOfRange = new Date(startOfWeek)
+    endOfRange.setDate(startOfWeek.getDate() + 14)
+    endOfRange.setHours(23, 59, 59, 999)
 
     return events
-      .filter((event) => event.start >= today && event.start <= nextWeek)
+      .filter((event) => event.start >= startOfWeek && event.start <= endOfRange)
       .sort((a, b) => a.start.getTime() - b.start.getTime())
   }
 
@@ -432,17 +440,19 @@ export function CalendarMainView({
   const renderWeekView = () => {
     const weekDays = generateWeekDays()
     const timeSlots = generateTimeSlots()
+    const MAX_VISIBLE_PER_SLOT = 2
 
     return (
       <div className="flex-1 flex flex-col animate-in fade-in-50 duration-300">
-        <div className="grid grid-cols-8 border-b border-border bg-muted/30">
-          <div className="p-3"></div>
+        {/* Header with days */}
+        <div className="flex border-b border-border bg-muted/30">
+          <div className="w-16 flex-shrink-0 p-3"></div>
           {weekDays.map((day, index) => {
             const isTodayDay = isToday(day)
             return (
               <div
                 key={index}
-                className="p-3 text-center transition-all duration-200 hover:bg-muted/40 cursor-pointer group"
+                className="flex-1 p-3 text-center transition-all duration-200 hover:bg-muted/40 cursor-pointer group"
                 onClick={() => {
                   onDateChange(day)
                   onViewTypeChange("day")
@@ -465,52 +475,75 @@ export function CalendarMainView({
           })}
         </div>
 
+        {/* Time grid */}
         <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-8 min-h-full">
-            <div className="border-r border-border bg-muted/10">
+          <div className="flex min-h-full w-full">
+            {/* Time column */}
+            <div className="w-16 flex-shrink-0 border-r border-border bg-muted/10">
               {timeSlots.map((hour) => (
-                <div key={hour} className="h-16 border-b border-border p-2 text-sm text-muted-foreground">
+                <div key={hour} className="h-16 border-b border-border px-2 py-2 text-sm text-muted-foreground text-right">
                   {hour.toString().padStart(2, "0")}:00
                 </div>
               ))}
             </div>
 
+            {/* Day columns */}
             {weekDays.map((day, dayIndex) => {
               const dayEvents = getEventsForDay(day)
-              return (
-                <div key={dayIndex} className="border-r border-border relative">
-                  {timeSlots.map((hour) => (
-                    <div key={hour} className="h-16 border-b border-border hover:bg-muted/10 transition-colors"></div>
-                  ))}
 
-                  {dayEvents.map((event, eventIndex) => {
-                    const style = getEventStyle(event)
+              // Group events by hour
+              const eventsByHour = new Map<number, CalendarEvent[]>()
+              dayEvents.forEach((event) => {
+                const hour = event.start.getHours()
+                if (!eventsByHour.has(hour)) {
+                  eventsByHour.set(hour, [])
+                }
+                eventsByHour.get(hour)!.push(event)
+              })
+
+              return (
+                <div key={dayIndex} className="flex-1 min-w-0 border-r border-border relative overflow-hidden">
+                  {timeSlots.map((hour) => {
+                    const hourEvents = eventsByHour.get(hour) || []
+                    const visibleEvents = hourEvents.slice(0, MAX_VISIBLE_PER_SLOT)
+                    const hiddenCount = hourEvents.length - MAX_VISIBLE_PER_SLOT
+
                     return (
-                      <div
-                        key={event.id}
-                        className={`absolute left-1 right-1 ${event.color} text-white text-xs p-1 rounded shadow-sm z-10 transition-all duration-200 hover:shadow-md hover:scale-105 cursor-pointer`}
-                        style={style}
-                        title={`${event.title} (${event.start.getHours()}:${event.start.getMinutes().toString().padStart(2, "0")} - ${event.end.getHours()}:${event.end.getMinutes().toString().padStart(2, "0")})`}
-                        onClick={() => {
-                          if (event.isTask && event.taskId) {
-                            openTaskDetail(event)
-                          } else if (onToggleTask) {
-                            onToggleTask(event.taskId || event.id)
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-1">
-                          <div className="font-medium truncate">{event.title.replace("📋 ", "")}</div>
-                          {event.priority && (
-                            <Flag className={`h-3 w-3 ${getPriorityFlagColor(event.priority)}`} />
-                          )}
-                        </div>
-                        <div className="text-xs opacity-90">
-                          {event.start.getHours().toString().padStart(2, "0")}:
-                          {event.start.getMinutes().toString().padStart(2, "0")} -
-                          {event.end.getHours().toString().padStart(2, "0")}:
-                          {event.end.getMinutes().toString().padStart(2, "0")}
-                        </div>
+                      <div key={hour} className="h-16 border-b border-border hover:bg-muted/10 transition-colors relative">
+                        {visibleEvents.map((event, index) => (
+                          <div
+                            key={event.id}
+                            className={`absolute ${event.color} text-white text-xs px-1 py-0.5 rounded shadow-sm cursor-pointer hover:shadow-md transition-all truncate`}
+                            style={{
+                              top: `${index * 28 + 2}px`,
+                              left: '2px',
+                              right: hiddenCount > 0 ? '36px' : '2px',
+                              height: '24px',
+                            }}
+                            title={`${event.title} (${event.start.getHours()}:${event.start.getMinutes().toString().padStart(2, "0")} - ${event.end.getHours()}:${event.end.getMinutes().toString().padStart(2, "0")})`}
+                            onClick={() => {
+                              if (event.isTask && event.taskId) {
+                                openTaskDetail(event)
+                              } else if (onToggleTask) {
+                                onToggleTask(event.taskId || event.id)
+                              }
+                            }}
+                          >
+                            <span className="truncate text-xs">{event.title.replace("📋 ", "")}</span>
+                          </div>
+                        ))}
+                        {hiddenCount > 0 && (
+                          <div
+                            className="absolute right-0.5 top-0.5 bg-gray-600 text-white text-xs px-1 py-0.5 rounded cursor-pointer hover:bg-gray-700 transition-colors"
+                            style={{ height: '24px', fontSize: '10px' }}
+                            onClick={() => {
+                              onDateChange(day)
+                              onViewTypeChange("agenda")
+                            }}
+                          >
+                            +{hiddenCount}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -527,6 +560,18 @@ export function CalendarMainView({
     const timeSlots = generateTimeSlots()
     const dayEvents = getEventsForDay(currentDate)
     const isTodayDay = isToday(currentDate)
+
+    // Group events by start hour
+    const eventsByHour = new Map<number, CalendarEvent[]>()
+    dayEvents.forEach((event) => {
+      const hour = event.start.getHours()
+      if (!eventsByHour.has(hour)) {
+        eventsByHour.set(hour, [])
+      }
+      eventsByHour.get(hour)!.push(event)
+    })
+
+    const MAX_VISIBLE_PER_SLOT = 2
 
     return (
       <div className="flex-1 flex flex-col animate-in fade-in-50 duration-300">
@@ -546,7 +591,7 @@ export function CalendarMainView({
         </div>
 
         <div className="flex-1 overflow-auto">
-          <div className="flex">
+          <div className="flex w-full">
             <div className="w-20 border-r border-border flex-shrink-0 bg-muted/10">
               {timeSlots.map((hour) => (
                 <div key={hour} className="h-16 border-b border-border p-2 text-sm text-muted-foreground">
@@ -555,37 +600,54 @@ export function CalendarMainView({
               ))}
             </div>
 
-            <div className="flex-1 relative">
-              {timeSlots.map((hour) => (
-                <div key={hour} className="h-16 border-b border-border hover:bg-muted/10 transition-colors"></div>
-              ))}
+            <div className="flex-1 min-w-0 relative overflow-hidden">
+              {timeSlots.map((hour) => {
+                const hourEvents = eventsByHour.get(hour) || []
+                const visibleEvents = hourEvents.slice(0, MAX_VISIBLE_PER_SLOT)
+                const hiddenCount = hourEvents.length - MAX_VISIBLE_PER_SLOT
 
-              {dayEvents.map((event) => {
-                const style = getEventStyle(event)
                 return (
-                  <div
-                    key={event.id}
-                    className={`absolute left-2 right-2 ${event.color} text-white p-3 rounded shadow-md z-10 transition-all duration-200 hover:shadow-lg hover:scale-105 cursor-pointer`}
-                    style={style}
-                    title={`${event.title} (${event.start.getHours()}:${event.start.getMinutes().toString().padStart(2, "0")} - ${event.end.getHours()}:${event.end.getMinutes().toString().padStart(2, "0")})`}
-                    onClick={() => {
-                      if (event.isTask && event.taskId) {
-                        openTaskDetail(event)
-                      } else if (onToggleTask) {
-                        onToggleTask(event.taskId || event.id)
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-1">
-                      <div className="font-medium text-sm">{event.title.replace("📋 ", "")}</div>
-                      {event.priority && (
-                        <Flag className={`h-3 w-3 ${getPriorityFlagColor(event.priority)}`} />
-                      )}
-                    </div>
-                    <div className="text-xs opacity-90 mt-1">
-                      {event.start.getHours().toString().padStart(2, "0")}:
-                      {event.start.getMinutes().toString().padStart(2, "0")}
-                    </div>
+                  <div key={hour} className="h-16 border-b border-border hover:bg-muted/10 transition-colors relative">
+                    {visibleEvents.map((event, index) => (
+                      <div
+                        key={event.id}
+                        className={`absolute ${event.color} text-white text-xs px-2 py-1 rounded shadow-sm cursor-pointer hover:shadow-md transition-all truncate`}
+                        style={{
+                          top: `${index * 28 + 2}px`,
+                          left: '4px',
+                          right: hiddenCount > 0 ? '70px' : '4px',
+                          height: '24px',
+                        }}
+                        title={`${event.title} (${event.start.getHours()}:${event.start.getMinutes().toString().padStart(2, "0")} - ${event.end.getHours()}:${event.end.getMinutes().toString().padStart(2, "0")})`}
+                        onClick={() => {
+                          if (event.isTask && event.taskId) {
+                            openTaskDetail(event)
+                          } else if (onToggleTask) {
+                            onToggleTask(event.taskId || event.id)
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className="truncate">{event.title.replace("📋 ", "")}</span>
+                          {event.priority && (
+                            <Flag className={`h-2 w-2 flex-shrink-0 ${getPriorityFlagColor(event.priority)}`} />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {hiddenCount > 0 && (
+                      <div
+                        className="absolute right-1 top-1 bg-gray-600 text-white text-xs px-2 py-1 rounded cursor-pointer hover:bg-gray-700 transition-colors"
+                        style={{ height: '24px' }}
+                        onClick={() => {
+                          // Switch to agenda view for this day to see all events
+                          onDateChange(currentDate)
+                          onViewTypeChange("agenda")
+                        }}
+                      >
+                        +{hiddenCount} more
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -692,61 +754,110 @@ export function CalendarMainView({
   const renderMultiDayView = () => {
     const multiDays = generateMultiDayDays()
     const timeSlots = generateTimeSlots()
+    const MAX_VISIBLE_PER_SLOT = 2
 
     return (
       <div className="flex-1 flex flex-col animate-in fade-in-50 duration-300">
-        <div className="grid grid-cols-4 border-b border-border bg-muted/30">
-          {dayNames.map((day) => (
-            <div key={day} className="p-3 text-center text-sm font-medium text-muted-foreground">
-              {day}
-            </div>
-          ))}
+        {/* Header with days */}
+        <div className="flex border-b border-border bg-muted/30">
+          <div className="w-16 flex-shrink-0 p-3"></div>
+          {multiDays.map((day, index) => {
+            const isTodayDay = isToday(day)
+            return (
+              <div
+                key={index}
+                className="flex-1 p-3 text-center transition-all duration-200 hover:bg-muted/40 cursor-pointer group"
+                onClick={() => {
+                  onDateChange(day)
+                  onViewTypeChange("day")
+                }}
+              >
+                <div className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                  {dayNames[day.getDay()]}
+                </div>
+                <div
+                  className={`text-lg font-semibold mt-1 transition-all duration-200 ${
+                    isTodayDay
+                      ? "bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center mx-auto shadow-sm"
+                      : "text-foreground group-hover:text-primary"
+                  }`}
+                >
+                  {day.getDate()}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
+        {/* Time grid */}
         <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-4 min-h-full">
-            <div className="border-r border-border bg-muted/10">
+          <div className="flex min-h-full w-full">
+            {/* Time column */}
+            <div className="w-16 flex-shrink-0 border-r border-border bg-muted/10">
               {timeSlots.map((hour) => (
-                <div key={hour} className="h-16 border-b border-border p-2 text-sm text-muted-foreground">
+                <div key={hour} className="h-16 border-b border-border px-2 py-2 text-sm text-muted-foreground text-right">
                   {hour.toString().padStart(2, "0")}:00
                 </div>
               ))}
             </div>
 
+            {/* Day columns */}
             {multiDays.map((day, dayIndex) => {
               const dayEvents = getEventsForDay(day)
-              return (
-                <div key={dayIndex} className="border-r border-border relative">
-                  {timeSlots.map((hour) => (
-                    <div key={hour} className="h-16 border-b border-border hover:bg-muted/10 transition-colors"></div>
-                  ))}
 
-                  {dayEvents.map((event) => {
-                    const style = getEventStyle(event)
+              // Group events by hour
+              const eventsByHour = new Map<number, CalendarEvent[]>()
+              dayEvents.forEach((event) => {
+                const hour = event.start.getHours()
+                if (!eventsByHour.has(hour)) {
+                  eventsByHour.set(hour, [])
+                }
+                eventsByHour.get(hour)!.push(event)
+              })
+
+              return (
+                <div key={dayIndex} className="flex-1 min-w-0 border-r border-border relative overflow-hidden">
+                  {timeSlots.map((hour) => {
+                    const hourEvents = eventsByHour.get(hour) || []
+                    const visibleEvents = hourEvents.slice(0, MAX_VISIBLE_PER_SLOT)
+                    const hiddenCount = hourEvents.length - MAX_VISIBLE_PER_SLOT
+
                     return (
-                      <div
-                        key={event.id}
-                        className={`absolute left-1 right-1 ${event.color} text-white text-xs p-1 rounded shadow-sm z-10 transition-all duration-200 hover:shadow-md hover:scale-105 cursor-pointer`}
-                        style={style}
-                        title={`${event.title} (${event.start.getHours()}:${event.start.getMinutes().toString().padStart(2, "0")} - ${event.end.getHours()}:${event.end.getMinutes().toString().padStart(2, "0")})`}
-                        onClick={() => {
-                          if (event.isTask && event.taskId) {
-                            openTaskDetail(event)
-                          } else if (onToggleTask) {
-                            onToggleTask(event.taskId || event.id)
-                          }
-                        }}
-                      >
-                        <div className="flex items-center gap-1">
-                          <div className="font-medium truncate">{event.title.replace("📋 ", "")}</div>
-                          {event.priority && (
-                            <Flag className={`h-3 w-3 ${getPriorityFlagColor(event.priority)}`} />
-                          )}
-                        </div>
-                        <div className="text-xs opacity-90">
-                          {event.start.getHours().toString().padStart(2, "0")}:
-                          {event.start.getMinutes().toString().padStart(2, "0")}
-                        </div>
+                      <div key={hour} className="h-16 border-b border-border hover:bg-muted/10 transition-colors relative">
+                        {visibleEvents.map((event, index) => (
+                          <div
+                            key={event.id}
+                            className={`absolute ${event.color} text-white text-xs px-1 py-0.5 rounded shadow-sm cursor-pointer hover:shadow-md transition-all truncate`}
+                            style={{
+                              top: `${index * 28 + 2}px`,
+                              left: '2px',
+                              right: hiddenCount > 0 ? '36px' : '2px',
+                              height: '24px',
+                            }}
+                            title={`${event.title} (${event.start.getHours()}:${event.start.getMinutes().toString().padStart(2, "0")} - ${event.end.getHours()}:${event.end.getMinutes().toString().padStart(2, "0")})`}
+                            onClick={() => {
+                              if (event.isTask && event.taskId) {
+                                openTaskDetail(event)
+                              } else if (onToggleTask) {
+                                onToggleTask(event.taskId || event.id)
+                              }
+                            }}
+                          >
+                            <span className="truncate text-xs">{event.title.replace("📋 ", "")}</span>
+                          </div>
+                        ))}
+                        {hiddenCount > 0 && (
+                          <div
+                            className="absolute right-0.5 top-0.5 bg-gray-600 text-white text-xs px-1 py-0.5 rounded cursor-pointer hover:bg-gray-700 transition-colors"
+                            style={{ height: '24px', fontSize: '10px' }}
+                            onClick={() => {
+                              onDateChange(day)
+                              onViewTypeChange("agenda")
+                            }}
+                          >
+                            +{hiddenCount}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -838,8 +949,8 @@ export function CalendarMainView({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background relative">
-      <div className="p-6 border-b border-border bg-card/50 backdrop-blur-sm">
+    <div className="flex-1 flex flex-col bg-background relative h-full overflow-hidden">
+      <div className="flex-shrink-0 p-6 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-2xl font-semibold text-balance">{getHeaderTitle()}</h1>
@@ -912,6 +1023,7 @@ export function CalendarMainView({
               <TaskForm
                 onSubmit={handleTaskCreation}
                 onCancel={() => setShowTaskPanel(false)}
+                defaultDate={currentDate}
                 currentContext={{
                   view: 'inbox'
                 }}
@@ -929,43 +1041,46 @@ export function CalendarMainView({
         }}
         task={selectedTask}
         onUpdateTask={onUpdateTask || (() => {})}
+        onDeleteTask={onDeleteTask}
         onToggleCompletion={onToggleCompletion || (() => {})}
         onSendToCompleted={onSendToCompleted || (() => {})}
       />
 
-      {viewType === "month" ? (
-        renderMonthView()
-      ) : viewType === "week" ? (
-        renderWeekView()
-      ) : viewType === "day" ? (
-        renderDayView()
-      ) : viewType === "agenda" ? (
-        renderAgendaView()
-      ) : viewType === "multi-day" ? (
-        renderMultiDayView()
-      ) : viewType === "multi-week" ? (
-        renderMultiWeekView()
-      ) : (
-        <div className="flex-1 p-6 animate-in fade-in-50 duration-300">
-          <div className="text-center py-20">
-            <p className="text-muted-foreground text-lg">{viewType} view coming soon</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Currently showing {viewType} view for {getHeaderTitle()}
-            </p>
-            <div className="mt-6 space-y-2">
-              <p className="text-sm font-medium">Sample Events:</p>
-              {events.slice(0, 3).map((event) => (
-                <div key={event.id} className="flex items-center gap-2 justify-center">
-                  <div className={`w-3 h-3 rounded ${event.color}`} />
-                  <span className="text-sm">{event.title}</span>
-                </div>
-              ))}
+      <div className="flex-1 overflow-auto min-h-0">
+        {viewType === "month" ? (
+          renderMonthView()
+        ) : viewType === "week" ? (
+          renderWeekView()
+        ) : viewType === "day" ? (
+          renderDayView()
+        ) : viewType === "agenda" ? (
+          renderAgendaView()
+        ) : viewType === "multi-day" ? (
+          renderMultiDayView()
+        ) : viewType === "multi-week" ? (
+          renderMultiWeekView()
+        ) : (
+          <div className="flex-1 p-6 animate-in fade-in-50 duration-300">
+            <div className="text-center py-20">
+              <p className="text-muted-foreground text-lg">{viewType} view coming soon</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Currently showing {viewType} view for {getHeaderTitle()}
+              </p>
+              <div className="mt-6 space-y-2">
+                <p className="text-sm font-medium">Sample Events:</p>
+                {events.slice(0, 3).map((event) => (
+                  <div key={event.id} className="flex items-center gap-2 justify-center">
+                    <div className={`w-3 h-3 rounded ${event.color}`} />
+                    <span className="text-sm">{event.title}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="p-4 border-t border-border bg-card/30 backdrop-blur-sm">
+      <div className="flex-shrink-0 p-4 border-t border-border bg-card/95 backdrop-blur-sm z-10">
         <div className="flex items-center justify-center gap-2">
           {["Month", "Week", "Day", "Agenda", "Multi-Day", "Multi-Week"].map((view) => (
             <Button
